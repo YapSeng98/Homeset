@@ -61,19 +61,43 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 let opened: Promise<IDBDatabase> | undefined;
-function db(): Promise<IDBDatabase> {
-  return (opened ??= new Promise((resolve, reject) => {
+const db = (): Promise<IDBDatabase> => (opened ??= openDb());
+
+async function openDb(): Promise<IDBDatabase> {
+  let fresh = false;
+  const d = await new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open('homeset', 1);
-    req.onupgradeneeded = () => {
-      const d = req.result;
-      d.createObjectStore('projects', { keyPath: 'id' });
-      d.createObjectStore('tours', { keyPath: 'slug' }).createIndex('projectId', 'projectId', { unique: true });
-      d.createObjectStore('leads', { keyPath: 'id' }).createIndex('projectId', 'projectId');
-      d.createObjectStore('events', { autoIncrement: true }).createIndex('slug', 'slug');
+    req.onupgradeneeded = (e) => {
+      fresh = e.oldVersion === 0;
+      const idb = req.result;
+      idb.createObjectStore('projects', { keyPath: 'id' });
+      idb.createObjectStore('tours', { keyPath: 'slug' }).createIndex('projectId', 'projectId', { unique: true });
+      idb.createObjectStore('leads', { keyPath: 'id' }).createIndex('projectId', 'projectId');
+      idb.createObjectStore('events', { autoIncrement: true }).createIndex('slug', 'slug');
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
-  }));
+  });
+  if (fresh) await seedShowcase(d);
+  return d;
+}
+
+/** A browser's first visit starts with the showcase projects in public/showcase.json (made by scripts/export-showcase.mjs). */
+async function seedShowcase(d: IDBDatabase): Promise<void> {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}showcase.json`);
+    if (!res.ok) return;
+    const projects = (await res.json()) as Omit<ProjectRow, 'createdAt' | 'updatedAt'>[];
+    const now = new Date().toISOString();
+    const tx = d.transaction('projects', 'readwrite');
+    for (const p of projects) tx.objectStore('projects').put({ ...p, model: migrateModel(p.model), createdAt: now, updatedAt: now } satisfies ProjectRow);
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    /* the app works without the showcase */
+  }
 }
 
 type StoreName = 'projects' | 'tours' | 'leads' | 'events';

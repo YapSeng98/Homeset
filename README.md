@@ -24,6 +24,7 @@ Data (SQLite database and uploads) lives in `./data/`. Delete that folder to res
 GitHub Pages only hosts static files, so the demo is a browser-only build: `apps/web/src/browserApi.ts` implements the same API as the server on top of IndexedDB. Everything works (editor, 3D, HD Photo, Real View, publishing, enquiries, insights), but data stays in the visitor's browser, so **a published tour link only opens on the device that created it**. Sharing tours with buyers needs the server version hosted somewhere.
 
 - Every push to `main` deploys it via `.github/workflows/pages.yml` (one-time setup: repo **Settings → Pages → Source: GitHub Actions**).
+- Showcase: a visitor's first visit starts with the projects in `apps/web/public/showcase.json`. To update it from your local projects (with `npm run dev` running): `npm run showcase:export -- prj_3knkhk00yq [more ids]`, then commit and push.
 - Locally: `npm run build:pages && npm run preview:pages`, then open http://localhost:4173/Homeset/
 - Test it: `VITE_E2E=1 npm run build:pages`, `npm run preview:pages`, then `BASE_URL=http://localhost:4173/Homeset GPU=1 npm run e2e`
 

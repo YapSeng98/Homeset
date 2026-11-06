@@ -12,6 +12,7 @@
     "build": "npm run build -w @homeset/web",
     "build:pages": "VITE_BACKEND=browser BASE_PATH=/Homeset/ npm run build && cp apps/web/dist/index.html apps/web/dist/404.html",
     "preview:pages": "node tests/e2e/serve-pages.mjs",
+    "showcase:export": "node scripts/export-showcase.mjs",
     "start": "npm run start -w @homeset/api",
     "test": "vitest run",
     "e2e": "node tests/e2e/smoke.mjs",
