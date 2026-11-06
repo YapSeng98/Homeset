@@ -5,49 +5,25 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
-import { createEmptyModel, createId, HomeModelSchema, randomString, REGIONS, RegionSchema } from '@rumah3d/core';
+import {
+  AgentSchema,
+  createEmptyModel,
+  createId,
+  HomeModelSchema,
+  LeadSchema,
+  ListingSchema,
+  publicModel,
+  publishBlocker,
+  randomString,
+  RegionSchema,
+  TourEventsSchema,
+} from '@homeset/core';
 import type { Config } from './config';
 import { createAuthenticate } from './auth';
 import { PLANS } from './plans';
 import type { Store } from './store/types';
 
 const IMAGE_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
-
-const ListingSchema = z.object({
-  title: z.string().trim().min(3).max(120),
-  listingType: z.enum(['sale', 'rent']),
-  price: z.number().positive().optional(),
-  builtUpSqft: z.number().positive().optional(),
-  bedrooms: z.number().int().min(0).max(20).optional(),
-  bathrooms: z.number().int().min(0).max(20).optional(),
-  tenure: z.string().max(40).optional(),
-  address: z.string().max(200).optional(),
-  description: z.string().max(2000).optional(),
-});
-
-const AgentSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  phone: z.string().trim().regex(/^\+?[0-9 -]{8,16}$/, 'Phone number looks wrong'),
-  agentRegNo: z.string().trim().max(30),
-  agencyName: z.string().trim().max(120),
-  agencyRegNo: z.string().trim().max(40),
-});
-
-const LeadSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  phone: z.string().trim().regex(/^\+?[0-9 -]{8,16}$/, 'Phone number looks wrong'),
-  email: z.email().optional().or(z.literal('')),
-  message: z.string().max(1000).optional(),
-  /** PDPA (MY/SG): explicit consent to be contacted. */
-  consent: z.literal(true),
-});
-
-const EventsSchema = z.object({
-  session: z.string().min(6).max(64),
-  events: z
-    .array(z.object({ type: z.enum(['view', 'room']), roomId: z.string().max(64).optional(), seconds: z.number().min(0).max(3600).optional() }))
-    .max(200),
-});
 
 export async function buildApp(store: Store, config: Config): Promise<FastifyInstance> {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test', bodyLimit: 5 * 1024 * 1024 });
@@ -131,30 +107,20 @@ export async function buildApp(store: Store, config: Config): Promise<FastifyIns
       const body = z.object({ listing: ListingSchema, agent: AgentSchema }).safeParse(req.body);
       if (!body.success) return reply.code(400).send(badRequest(body.error));
 
-      // Registration numbers required by the country's rules (REN/REA in MY, CEA in SG).
-      const missing = REGIONS[project.region].agentDisclosure.filter(
-        (f) => f.required && !String((body.data.agent as Record<string, unknown>)[f.key] ?? '').trim(),
-      );
-      if (missing.length) {
-        return reply.code(400).send({ error: `Required for ${REGIONS[project.region].name}: ${missing.map((f) => f.label).join(', ')}` });
-      }
-      if (project.model.levels.every((l) => l.walls.length === 0)) {
-        return reply.code(400).send({ error: 'Draw the floor plan before publishing' });
-      }
+      const blocker = publishBlocker(project.region, project.model, body.data.agent);
+      if (blocker) return reply.code(400).send({ error: blocker });
 
       const existing = await store.getTourByProject(project.id);
       const plan = PLANS[req.auth.org.plan];
       if (!existing && (await store.countTours(req.auth.org.id)) >= plan.maxActiveTours) {
         return reply.code(402).send({ error: 'Tour limit reached for your plan. Upgrade to publish more tours.' });
       }
-      // Underlay images are private working files; never publish them.
-      const publicModel = { ...project.model, levels: project.model.levels.map(({ underlay: _u, ...l }) => l) };
       const tour = await store.upsertTour({
         slug: existing?.slug ?? randomString(8),
         projectId: project.id,
         orgId: req.auth.org.id,
         region: project.region,
-        model: publicModel,
+        model: publicModel(project.model),
         listing: body.data.listing,
         agent: body.data.agent,
         publishedAt: new Date().toISOString(),
@@ -228,7 +194,7 @@ export async function buildApp(store: Store, config: Config): Promise<FastifyIns
   app.post<{ Params: { slug: string } }>('/api/public/tours/:slug/events', async (req, reply) => {
     const tour = await store.getTour(req.params.slug);
     if (!tour) return reply.code(404).send({ error: 'Tour not found' });
-    const body = EventsSchema.safeParse(req.body);
+    const body = TourEventsSchema.safeParse(req.body);
     if (!body.success) return reply.code(400).send(badRequest(body.error));
     await store.addTourEvents(tour.slug, body.data.session, body.data.events);
     return reply.code(204).send();

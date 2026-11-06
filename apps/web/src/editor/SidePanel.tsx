@@ -19,7 +19,7 @@ import {
   type Opening,
   type OpeningKind,
   type RoomType,
-} from '@rumah3d/core';
+} from '@homeset/core';
 import { useI18n, type MessageKey } from '../i18n';
 import { registry } from '../registry';
 import { useEditor, type EditorStore } from './store';

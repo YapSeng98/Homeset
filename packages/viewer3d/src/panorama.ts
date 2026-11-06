@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { add, dist, lineOfSight, pointInPolygon, scale, wallFrame, type Opening, type Vec2, type Wall } from '@rumah3d/core';
+import { add, dist, lineOfSight, pointInPolygon, scale, wallFrame, type Opening, type Vec2, type Wall } from '@homeset/core';
 
 export interface PanoramaStop {
   id: string;

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { HouseViewer } from '@rumah3d/viewer3d';
+import type { HouseViewer } from '@homeset/viewer3d';
 import { useI18n } from '../i18n';
 
 type Phase =

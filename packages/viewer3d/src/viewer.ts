@@ -6,7 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { distanceToPolygonEdge, pointInPolygon, type HomeModel, type Registry, type Vec2 } from '@rumah3d/core';
+import { distanceToPolygonEdge, pointInPolygon, type HomeModel, type Registry, type Vec2 } from '@homeset/core';
 import { buildLevel, type BuiltLevel, type RoomInfo } from './house';
 import { MaterialLibrary } from './materials';
 import { WalkControls } from './walk';

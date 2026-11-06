@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { formatMoney, randomString, REGIONS } from '@rumah3d/core';
-import type { HouseViewer, PanoramaViewer, ViewMode } from '@rumah3d/viewer3d';
+import { formatMoney, randomString, REGIONS } from '@homeset/core';
+import type { HouseViewer, PanoramaViewer, ViewMode } from '@homeset/viewer3d';
 import { api, type PublicTour } from '../api';
+import { BROWSER_ONLY } from '../env';
 import { LangSwitcher, useI18n } from '../i18n';
 import { Icons } from '../components/Icons';
 import { Viewer3D } from '../components/Viewer3D';
@@ -90,7 +91,12 @@ export function TourPage() {
     setModeState(next);
   };
 
-  if (notFound) return <div className="center-msg">{t('tour.notFound')}</div>;
+  if (notFound)
+    return (
+      <div className="center-msg">
+        <p style={{ maxWidth: 420, padding: '0 16px', textAlign: 'center' }}>{t(BROWSER_ONLY ? 'demo.tourMissing' : 'tour.notFound')}</p>
+      </div>
+    );
   if (!tour) return <div className="center-msg">{t('tour.loading')}</div>;
 
   const { listing, agent } = tour;

@@ -24,7 +24,7 @@ import {
   type RoomType,
   type Vec2,
   type Wall,
-} from '@rumah3d/core';
+} from '@homeset/core';
 import { useI18n } from '../i18n';
 import { registry } from '../registry';
 import { useEditor, type EditorStore } from './store';

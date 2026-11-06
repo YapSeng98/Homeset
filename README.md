@@ -1,6 +1,8 @@
-# rumah3d
+# Homeset
 
 Design-to-sale platform for Malaysia and Singapore. Upload a floor plan, trace it, and get a furnished 3D home. Buyers can walk through it, view photoreal 360° "Real View" rooms, and contact the agent on WhatsApp. Agents first, interior design (ID) firms next, Developer Pro later.
+
+**Live demo:** https://yapseng98.github.io/Homeset/
 
 ## Run it
 
@@ -16,6 +18,14 @@ npm run build && npm start   # production: one server on :8787 serves API + web 
 ```
 
 Data (SQLite database and uploads) lives in `./data/`. Delete that folder to reset.
+
+## GitHub Pages demo
+
+GitHub Pages only hosts static files, so the demo is a browser-only build: `apps/web/src/browserApi.ts` implements the same API as the server on top of IndexedDB. Everything works (editor, 3D, HD Photo, Real View, publishing, enquiries, insights), but data stays in the visitor's browser, so **a published tour link only opens on the device that created it**. Sharing tours with buyers needs the server version hosted somewhere.
+
+- Every push to `main` deploys it via `.github/workflows/pages.yml` (one-time setup: repo **Settings → Pages → Source: GitHub Actions**).
+- Locally: `npm run build:pages && npm run preview:pages`, then open http://localhost:4173/Homeset/
+- Test it: `VITE_E2E=1 npm run build:pages`, `npm run preview:pages`, then `BASE_URL=http://localhost:4173/Homeset GPU=1 npm run e2e`
 
 ## What works today
 
@@ -39,14 +49,14 @@ packages/core       Home Model schema (zod), geometry (wall joins, openings, roo
 packages/viewer3d   Framework-free three.js: house builder, walk controls, HD photo and
                     360° path tracing, Real View panorama player
 apps/api            Fastify API: projects, uploads, publishing, leads, analytics (SQLite store)
-apps/web            React app: dashboard, editor, public tour page
+apps/web            React app: dashboard, editor, public tour page (server or browser-only backend)
 ```
 
 **One model, many views:** the 2D plan, 3D view, walkthrough, photos, Real View and (later) quotations all read the same `HomeModel` JSON. Every edit is a `Command` (see `packages/core/src/commands.ts`), which gives undo/redo now and collaboration/audit later.
 
 ## Extending
 
-- **Furniture and materials:** add a plugin with `definePlugin({ catalogItems, materials })` and register it in `apps/web/src/registry.ts`. Real models are `model: { kind: 'gltf', url }` with the item's real size. Code-built models use `registerFurnitureBuilder()` in `@rumah3d/viewer3d`.
+- **Furniture and materials:** add a plugin with `definePlugin({ catalogItems, materials })` and register it in `apps/web/src/registry.ts`. Real models are `model: { kind: 'gltf', url }` with the item's real size. Code-built models use `registerFurnitureBuilder()` in `@homeset/viewer3d`.
 - **Country rules:** tax, currency and required agent disclosures are in `packages/core/src/region.ts`.
 - **Plans and features:** subscription tiers map to feature flags in `apps/api/src/plans.ts`.
 - **Database:** routes depend on the `Store` interface (`apps/api/src/store/types.ts`). Add a `PostgresStore` for production without touching routes.

@@ -1,4 +1,4 @@
-import type { HomeModel, Region } from '@rumah3d/core';
+import type { HomeModel, Region } from '@homeset/core';
 import type { OrgType, PlanId } from '../plans';
 
 export interface OrgRecord {

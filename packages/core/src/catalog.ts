@@ -83,7 +83,7 @@ const materials: MaterialDef[] = [
 ];
 
 export const defaultCatalogPlugin = definePlugin({
-  id: 'rumah3d.default-catalog',
+  id: 'homeset.default-catalog',
   name: 'Default catalog',
   catalogItems: items,
   materials,

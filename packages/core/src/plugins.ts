@@ -7,7 +7,7 @@ export const localize = (text: LocalizedText, lang: Lang): string => text[lang] 
 export type CatalogCategory = 'living' | 'dining' | 'bedroom' | 'study' | 'kitchen' | 'bathroom' | 'decor';
 
 export type ItemModel =
-  /** Built from code by a named builder in @rumah3d/viewer3d (fast, tiny, no assets). */
+  /** Built from code by a named builder in @homeset/viewer3d (fast, tiny, no assets). */
   | { kind: 'procedural'; builder: string; color?: string; accent?: string; options?: Record<string, number> }
   /** A glTF/GLB file, scaled to the item size. */
   | { kind: 'gltf'; url: string };

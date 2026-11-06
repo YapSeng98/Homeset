@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { createId, migrateModel, type Region } from '@rumah3d/core';
+import { createId, migrateModel, type Region } from '@homeset/core';
 import type {
   AssetRecord,
   LeadRecord,
@@ -109,7 +109,7 @@ export class SqliteStore implements Store {
       .run(DEV_ORG_ID, 'Demo Realty', 'agency', 'MY', 'agent_pro');
     this.db
       .prepare(`INSERT OR IGNORE INTO users (id, org_id, name, email, role) VALUES (?, ?, ?, ?, ?)`)
-      .run(DEV_USER_ID, DEV_ORG_ID, 'Demo Agent', 'demo@rumah3d.local', 'owner');
+      .run(DEV_USER_ID, DEV_ORG_ID, 'Demo Agent', 'demo@homeset.local', 'owner');
   }
 
   async getOrg(id: string): Promise<OrgRecord | undefined> {

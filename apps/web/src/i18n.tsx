@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { Lang } from '@rumah3d/core';
+import type { Lang } from '@homeset/core';
 
 const en = {
   'app.tagline': 'Floor plan to 3D tour in minutes',
@@ -147,7 +147,10 @@ const en = {
   'tour.builtUp': 'sq ft built-up',
   'tour.beds': 'bed',
   'tour.baths': 'bath',
-  'tour.poweredBy': 'Made with rumah3d',
+  'tour.poweredBy': 'Made with Homeset',
+  'demo.note': 'Demo version: projects are saved in this browser only. Clearing your browser data deletes them.',
+  'demo.shareNote': 'Demo version: this link only opens in this browser, on this device. To share tours with buyers, Homeset needs to run with its server.',
+  'demo.tourMissing': 'This tour is not saved on this device. In the demo version, a tour only opens in the browser that created it.',
   'tour.loading': 'Loading 3D tour…',
   'tour.whatsappText': 'Hi, I saw your 3D tour of "{title}". Is it still available?',
   'share.text': 'Take a 3D walk through {title}: {url}',
@@ -319,7 +322,10 @@ const ms: Dict = {
   'tour.builtUp': 'kp keluasan binaan',
   'tour.beds': 'bilik',
   'tour.baths': 'bilik air',
-  'tour.poweredBy': 'Dibuat dengan rumah3d',
+  'tour.poweredBy': 'Dibuat dengan Homeset',
+  'demo.note': 'Versi demo: projek disimpan dalam pelayar ini sahaja. Memadam data pelayar akan memadam projek anda.',
+  'demo.shareNote': 'Versi demo: pautan ini hanya dibuka dalam pelayar ini, pada peranti ini. Untuk berkongsi lawatan dengan pembeli, Homeset perlu dijalankan bersama pelayannya.',
+  'demo.tourMissing': 'Lawatan ini tidak disimpan pada peranti ini. Dalam versi demo, lawatan hanya dibuka dalam pelayar yang menciptanya.',
   'tour.loading': 'Memuatkan lawatan 3D…',
   'tour.whatsappText': 'Hai, saya lihat lawatan 3D "{title}". Adakah ia masih ada?',
   'share.text': 'Lawati {title} dalam 3D: {url}',
@@ -488,7 +494,10 @@ const zh: Dict = {
   'tour.builtUp': '平方英尺建筑面积',
   'tour.beds': '房',
   'tour.baths': '卫',
-  'tour.poweredBy': '由 rumah3d 制作',
+  'tour.poweredBy': '由 Homeset 制作',
+  'demo.note': '演示版：项目仅保存在此浏览器中。清除浏览器数据会删除您的项目。',
+  'demo.shareNote': '演示版：此链接只能在本设备的此浏览器中打开。若要与买家分享导览，Homeset 需要连同服务器一起运行。',
+  'demo.tourMissing': '此设备上没有保存这个导览。在演示版中，导览只能在创建它的浏览器中打开。',
   'tour.loading': '正在加载3D导览…',
   'tour.whatsappText': '您好，我看了"{title}"的3D导览，请问还在吗？',
   'share.text': '3D漫游 {title}：{url}',
@@ -522,7 +531,7 @@ interface I18n {
 }
 
 const Ctx = createContext<I18n | null>(null);
-const STORAGE_KEY = 'rumah3d.lang';
+const STORAGE_KEY = 'homeset.lang';
 
 function initialLang(): Lang {
   try {

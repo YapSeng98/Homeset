@@ -6,7 +6,7 @@ import { SqliteStore } from './store/sqlite';
 
 const config = loadConfig();
 fs.mkdirSync(config.dataDir, { recursive: true });
-const store = new SqliteStore(path.join(config.dataDir, 'rumah3d.db'));
+const store = new SqliteStore(path.join(config.dataDir, 'homeset.db'));
 const app = await buildApp(store, config);
 
 const shutdown = async () => {

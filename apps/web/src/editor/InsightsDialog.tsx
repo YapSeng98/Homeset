@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { HomeModel } from '@rumah3d/core';
+import type { HomeModel } from '@homeset/core';
 import { api, type Insights } from '../api';
 import { useI18n } from '../i18n';
 import { Icons } from '../components/Icons';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import type { CatalogItem } from '@rumah3d/core';
+import type { CatalogItem } from '@homeset/core';
 import type { MaterialLibrary } from './materials';
 import { single } from './geometry';
 

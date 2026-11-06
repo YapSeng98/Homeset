@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { HomeModel } from '@rumah3d/core';
-import { PanoramaViewer, type PanoramaStop } from '@rumah3d/viewer3d';
+import type { HomeModel } from '@homeset/core';
+import { PanoramaViewer, type PanoramaStop } from '@homeset/viewer3d';
 
 /** Stops for every room that has a Real View panorama. */
 export function panoramaStops(model: HomeModel): PanoramaStop[] {

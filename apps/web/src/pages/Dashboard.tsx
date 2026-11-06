@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Region } from '@rumah3d/core';
+import type { Region } from '@homeset/core';
 import { api, type ProjectSummary } from '../api';
+import { BROWSER_ONLY } from '../env';
 import { LangSwitcher, useI18n } from '../i18n';
 import { Logo } from '../components/Logo';
 import { sampleApartment } from '../templates';
@@ -65,6 +66,7 @@ export function Dashboard() {
         <div className="dash-head">
           <div>
             <h1>{t('dashboard.title')}</h1>
+            {BROWSER_ONLY && <p className="muted small">{t('demo.note')}</p>}
           </div>
         </div>
         {error && <p className="error">{error}</p>}

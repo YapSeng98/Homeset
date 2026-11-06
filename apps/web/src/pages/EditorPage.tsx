@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { Command, HomeModel } from '@rumah3d/core';
-import type { HouseViewer } from '@rumah3d/viewer3d';
+import type { Command, HomeModel } from '@homeset/core';
+import type { HouseViewer } from '@homeset/viewer3d';
 import { api, type Project } from '../api';
+import { TEST_HOOKS } from '../env';
 import { LangSwitcher, useI18n, type MessageKey } from '../i18n';
 import { Icons } from '../components/Icons';
 import { Viewer3D } from '../components/Viewer3D';
@@ -25,7 +26,7 @@ export function EditorPage() {
     api.getProject(id!).then(
       (p) => {
         const editorStore = new EditorStore(p.model);
-        if (import.meta.env.DEV) (window as unknown as { __store?: EditorStore }).__store = editorStore;
+        if (TEST_HOOKS) (window as unknown as { __store?: EditorStore }).__store = editorStore;
         setProject(p);
         setStore(editorStore);
       },

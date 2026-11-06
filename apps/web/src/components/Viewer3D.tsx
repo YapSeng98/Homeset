@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import type { HomeModel } from '@rumah3d/core';
-import { HouseViewer, type ViewMode } from '@rumah3d/viewer3d';
+import type { HomeModel } from '@homeset/core';
+import { HouseViewer, type ViewMode } from '@homeset/viewer3d';
+import { TEST_HOOKS } from '../env';
 import { registry } from '../registry';
 
 interface Props {
@@ -20,7 +21,7 @@ export function Viewer3D({ model, mode, onRoomChange, onReady }: Props) {
   useEffect(() => {
     const v = new HouseViewer(ref.current!, { registry, onRoomChange: (id) => roomCb.current?.(id) });
     viewer.current = v;
-    if (import.meta.env.DEV) (window as unknown as { __viewer?: HouseViewer }).__viewer = v;
+    if (TEST_HOOKS) (window as unknown as { __viewer?: HouseViewer }).__viewer = v;
     v.setModel(model);
     v.setMode(mode);
     onReady?.(v);

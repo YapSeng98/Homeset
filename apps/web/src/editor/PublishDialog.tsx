@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { area, REGIONS, sqft, type HomeModel } from '@rumah3d/core';
-import { api, type AgentProfile, type Listing } from '../api';
+import { area, REGIONS, sqft, type HomeModel } from '@homeset/core';
+import { api, appUrl, type AgentProfile, type Listing } from '../api';
+import { BROWSER_ONLY } from '../env';
 import { useI18n } from '../i18n';
 import { Icons } from '../components/Icons';
 import { waShareUrl } from '../components/whatsapp';
 
-const AGENT_KEY = 'rumah3d.agent';
+const AGENT_KEY = 'homeset.agent';
 
 function savedAgent(): AgentProfile {
   try {
@@ -32,7 +33,7 @@ function listingDefaults(model: HomeModel): Listing {
 
 export function ShareBox({ path, title }: { path: string; title: string }) {
   const { t } = useI18n();
-  const url = `${window.location.origin}${path}`;
+  const url = appUrl(path);
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -63,12 +64,13 @@ export function ShareBox({ path, title }: { path: string; title: string }) {
           <a className="btn btn-wa" href={waShareUrl(t('share.text', { title, url }))} target="_blank" rel="noreferrer">
             <Icons.whatsapp /> {t('publish.whatsapp')}
           </a>
-          <a className="btn" href={path} target="_blank" rel="noreferrer">
+          <a className="btn" href={url} target="_blank" rel="noreferrer">
             {t('publish.view')}
           </a>
           <span className="muted small">{t('publish.qr')}</span>
         </div>
       </div>
+      {BROWSER_ONLY && <p className="muted small">{t('demo.shareNote')}</p>}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { REGIONS, type Region } from '@rumah3d/core';
+import { REGIONS, type Region } from '@homeset/core';
 
 /** Normalises a local or international phone number into wa.me format (digits, with country code). */
 export function waNumber(phone: string, region: Region): string {

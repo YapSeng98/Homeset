@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import type { HomeModel, Panorama } from '@rumah3d/core';
-import type { HouseViewer } from '@rumah3d/viewer3d';
+import type { HomeModel, Panorama } from '@homeset/core';
+import type { HouseViewer } from '@homeset/viewer3d';
 import { api } from '../api';
 import { useI18n } from '../i18n';
 import { PanoramaView } from '../components/PanoramaView';

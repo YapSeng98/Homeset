@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { applyCommand, History, syncRooms, type Command, type DispatchOptions, type HomeModel, type Level } from '@rumah3d/core';
+import { applyCommand, History, syncRooms, type Command, type DispatchOptions, type HomeModel, type Level } from '@homeset/core';
 
 export type Tool = 'select' | 'wall' | 'door' | 'sliding-door' | 'window' | 'opening' | 'calibrate';
 export type ViewKind = 'plan' | 'orbit' | 'walk';

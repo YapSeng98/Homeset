@@ -1,5 +1,5 @@
 {
-  "name": "@rumah3d/web",
+  "name": "@homeset/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@rumah3d/core": "0.1.0",
-    "@rumah3d/viewer3d": "0.1.0",
+    "@homeset/core": "0.1.0",
+    "@homeset/viewer3d": "0.1.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

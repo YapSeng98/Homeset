@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MaterialDef, Registry } from '@rumah3d/core';
+import type { MaterialDef, Registry } from '@homeset/core';
 
 /** Deterministic pseudo-random numbers so textures look the same on every load. */
 function seeded(seed: number) {

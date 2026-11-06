@@ -11,7 +11,7 @@ import {
   type RoomType,
   type Vec2,
   type Wall,
-} from '@rumah3d/core';
+} from '@homeset/core';
 
 const EXT = 200;
 const INT = 120;

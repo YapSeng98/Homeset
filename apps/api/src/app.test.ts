@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { HomeModel } from '@rumah3d/core';
+import type { HomeModel } from '@homeset/core';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { SqliteStore } from './store/sqlite';
@@ -13,7 +13,7 @@ let store: SqliteStore;
 let dataDir: string;
 
 beforeAll(async () => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rumah3d-test-'));
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'homeset-test-'));
   store = new SqliteStore(':memory:');
   app = await buildApp(store, { ...loadConfig({}), dataDir, webDist: path.join(dataDir, 'no-web') });
 });
@@ -121,7 +121,7 @@ describe('agent flow: create → draw → publish → buyer views → lead → i
 
   it('uploads a floor plan image and serves it back', async () => {
     const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
-    const boundary = '----rumah3d';
+    const boundary = '----homeset';
     const payload = Buffer.concat([
       Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="plan.png"\r\nContent-Type: image/png\r\n\r\n`),
       png,
@@ -141,7 +141,7 @@ describe('agent flow: create → draw → publish → buyer views → lead → i
   });
 
   it('rejects non-image uploads', async () => {
-    const boundary = '----rumah3d';
+    const boundary = '----homeset';
     const payload = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.exe"\r\nContent-Type: application/octet-stream\r\n\r\nMZ\r\n--${boundary}--\r\n`);
     const res = await app.inject({ method: 'POST', url: `/api/projects/${projectId}/assets`, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload });
     expect(res.statusCode).toBe(415);

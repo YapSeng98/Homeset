@@ -13,7 +13,7 @@ export function Logo({ to = '/' }: { to?: string }) {
   return (
     <Link to={to} className="logo">
       <LogoMark />
-      rumah3d
+      Homeset
     </Link>
   );
 }

@@ -1,6 +1,8 @@
 // Full agent → buyer journey in a real browser. Dev servers must be running (npm run dev).
 //   npm run e2e            (software GPU: slow but works anywhere)
 //   GPU=1 npm run e2e      (real GPU: much faster)
+// GitHub Pages build: VITE_E2E=1 npm run build:pages, npm run preview:pages, then
+//   BASE_URL=http://localhost:4173/Homeset GPU=1 npm run e2e
 // Screenshots go to $E2E_OUT. Projects created here are deleted at the end.
 import { BASE, launch, OUT, sleep } from './cdp.mjs';
 
@@ -10,7 +12,7 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 };
 const created = new Set();
-const projectIdFromUrl = (b) => b.evaluate(`location.pathname.split('/')[2]`);
+const projectIdFromUrl = (b) => b.evaluate(`location.pathname.split('/p/')[1]`);
 const count = (b, sel) => b.evaluate(`document.querySelectorAll(${JSON.stringify(sel)}).length`);
 
 const b = await launch(9333);
@@ -44,7 +46,7 @@ try {
   check('Dashboard loads', true);
   await b.setField('Project name', 'E2E drawn room');
   await b.clickText('Create');
-  await b.waitFor(`location.pathname.startsWith('/p/') && !!document.querySelector('svg.plan')`);
+  await b.waitFor(`location.pathname.includes('/p/') && !!document.querySelector('svg.plan')`);
   created.add(await projectIdFromUrl(b));
   await b.clickText('Draw walls from scratch');
   await sleep(300);
@@ -74,7 +76,7 @@ try {
   await b.goto(`${BASE}/`);
   await b.waitFor(`!!document.querySelector('.dash')`);
   await b.clickText('Try the sample 3-bedroom layout');
-  await b.waitFor(`location.pathname.startsWith('/p/') && document.querySelectorAll('svg.plan polygon[data-kind="room"]').length > 0`, 15000);
+  await b.waitFor(`location.pathname.includes('/p/') && document.querySelectorAll('svg.plan polygon[data-kind="room"]').length > 0`, 15000);
   const sampleId = await projectIdFromUrl(b);
   created.add(sampleId);
   await sleep(400);
@@ -113,9 +115,8 @@ try {
     for (const name of ${JSON.stringify(panoRooms)}) {
       const room = window.__viewer.rooms.find((r) => r.name === name);
       const shot = await window.__viewer.renderPanorama(room.id, { samples: 2, width: 512 });
-      const form = new FormData();
-      form.append('file', new File([await (await fetch(shot.dataUrl)).blob()], 'pano.jpg', { type: 'image/jpeg' }));
-      const asset = await (await fetch('/api/projects/${sampleId}/assets', { method: 'POST', body: form })).json();
+      const file = new File([await (await fetch(shot.dataUrl)).blob()], 'pano.jpg', { type: 'image/jpeg' });
+      const asset = await window.__api.uploadAsset('${sampleId}', file);
       made.push({ roomId: room.id, url: asset.url, position: shot.position, height: shot.height });
     }
     const store = window.__store;
@@ -198,7 +199,7 @@ try {
 
   await b.evaluate(`window.dispatchEvent(new Event('pagehide')); true`);
   await sleep(800);
-  const insights = await (await fetch(`${BASE}/api/projects/${sampleId}/insights`)).json();
+  const insights = await b.evaluate(`window.__api.insights('${sampleId}')`);
   check('Agent sees the view, the lead and time per room', insights.analytics.views >= 1 && insights.leads.length === 1 && insights.analytics.rooms.length >= 1, JSON.stringify(insights.analytics));
 
   const bad = b.problems();
@@ -207,7 +208,7 @@ try {
   check('Unexpected failure', false, err.message);
   await b.shot('zz-failure').catch(() => {});
 } finally {
-  for (const id of created) await fetch(`${BASE}/api/projects/${id}`, { method: 'DELETE' }).catch(() => {});
+  for (const id of created) await b.evaluate(`window.__api.deleteProject('${id}')`, 10000).catch(() => fetch(`${BASE}/api/projects/${id}`, { method: 'DELETE' })).catch(() => {});
   console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed. Screenshots: ${OUT}`);
   await b.close();
   process.exit(results.every(Boolean) ? 0 : 1);

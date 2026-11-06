@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Vec2 } from '@rumah3d/core';
+import type { Vec2 } from '@homeset/core';
 
 export const M = 0.001; // mm → metres
 

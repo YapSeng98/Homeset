@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const CHROME = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 export const BASE = process.env.BASE_URL ?? 'http://localhost:5173';
-export const OUT = process.env.E2E_OUT ?? path.join(os.tmpdir(), 'rumah3d-e2e');
+export const OUT = process.env.E2E_OUT ?? path.join(os.tmpdir(), 'homeset-e2e');
 fs.mkdirSync(OUT, { recursive: true });
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -17,7 +17,7 @@ const KNOWN_NOISE =
   /WebGLPathTracer: This class has been deprecated|THREE\.Clock: This module has been deprecated|MeshBVH: "maxLeafTris"|iridescenceThicknessRange|"Source" has been renamed|KHR_parallel_shader_compile|GPU stall|favicon|React DevTools/;
 
 export async function launch(port = 9334) {
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'rumah3d-chrome-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'homeset-chrome-'));
   const gpuFlags = process.env.GPU === '1' ? ['--use-angle=metal', '--enable-gpu'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
   const chrome = spawn(
     CHROME,

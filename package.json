@@ -1,5 +1,5 @@
 {
-  "name": "rumah3d",
+  "name": "homeset",
   "private": true,
   "type": "module",
   "description": "Design-to-sale platform: floor plan to 2D/3D design, walkthrough tours, quotations and sales.",
@@ -8,9 +8,11 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w @rumah3d/api\" \"npm run dev -w @rumah3d/web\"",
-    "build": "npm run build -w @rumah3d/web",
-    "start": "npm run start -w @rumah3d/api",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w @homeset/api\" \"npm run dev -w @homeset/web\"",
+    "build": "npm run build -w @homeset/web",
+    "build:pages": "VITE_BACKEND=browser BASE_PATH=/Homeset/ npm run build && cp apps/web/dist/index.html apps/web/dist/404.html",
+    "preview:pages": "node tests/e2e/serve-pages.mjs",
+    "start": "npm run start -w @homeset/api",
     "test": "vitest run",
     "e2e": "node tests/e2e/smoke.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"

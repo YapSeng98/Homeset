@@ -1,4 +1,6 @@
-import type { HomeModel, Region } from '@rumah3d/core';
+import type { HomeModel, Region } from '@homeset/core';
+import { browserApi } from './browserApi';
+import { BROWSER_ONLY, TEST_HOOKS } from './env';
 
 export interface ProjectSummary {
   id: string;
@@ -73,7 +75,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   return data as T;
 }
 
-export const api = {
+const httpApi = {
   listProjects: () => request<ProjectSummary[]>('GET', '/api/projects'),
   createProject: (name: string, region: Region) => request<Project>('POST', '/api/projects', { name, region }),
   getProject: (id: string) => request<Project>('GET', `/api/projects/${id}`),
@@ -101,3 +103,11 @@ export const api = {
     }
   },
 };
+
+export type Api = typeof httpApi;
+
+export const api: Api = BROWSER_ONLY ? browserApi : httpApi;
+if (TEST_HOOKS) (window as unknown as { __api?: Api }).__api = api;
+
+/** Full URL of an in-app path such as `/t/abc123`, including the base path the app is served from. */
+export const appUrl = (path: string): string => new URL(path.replace(/^\//, ''), window.location.origin + import.meta.env.BASE_URL).href;

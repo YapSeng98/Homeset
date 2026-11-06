@@ -1,5 +1,5 @@
 {
-  "name": "@rumah3d/viewer3d",
+  "name": "@homeset/viewer3d",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@rumah3d/core": "0.1.0",
+    "@homeset/core": "0.1.0",
     "three": "^0.187.0",
     "three-gpu-pathtracer": "^0.0.27",
     "three-mesh-bvh": "^0.9.17"

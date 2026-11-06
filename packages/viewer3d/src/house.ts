@@ -22,7 +22,7 @@ import {
   type Room,
   type Vec2,
   type WallFootprint,
-} from '@rumah3d/core';
+} from '@homeset/core';
 import { flatPolygon, M, single, splitByMaterial, toWorld, wallPrism } from './geometry';
 import { buildFurniture } from './furniture';
 import type { MaterialLibrary } from './materials';
