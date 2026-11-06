@@ -1,0 +1,27 @@
+{
+  "name": "rumah3d",
+  "private": true,
+  "type": "module",
+  "description": "Design-to-sale platform: floor plan to 2D/3D design, walkthrough tours, quotations and sales.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w @rumah3d/api\" \"npm run dev -w @rumah3d/web\"",
+    "build": "npm run build -w @rumah3d/web",
+    "start": "npm run start -w @rumah3d/api",
+    "test": "vitest run",
+    "e2e": "node tests/e2e/smoke.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "concurrently": "^10.0.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
