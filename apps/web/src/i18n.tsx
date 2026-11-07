@@ -21,6 +21,15 @@ const en = {
   'dashboard.published': 'Published',
   'dashboard.draft': 'Draft',
   'dashboard.confirmDelete': 'Delete this project? This cannot be undone.',
+  'dashboard.edited': 'Edited {time}',
+  'dashboard.open': 'Open',
+  'home.eyebrow': 'Property & interior design studio',
+  'home.title': 'Turn any floor plan into a home buyers can walk through.',
+  'home.body': 'Trace the plan, furnish it with real 3D furniture, then share a photoreal 360° tour on WhatsApp and capture every lead.',
+  'home.step1': 'Upload & trace the floor plan',
+  'home.step2': 'Furnish it in 2D and 3D',
+  'home.step3': 'Render Real View 360°',
+  'home.step4': 'Share on WhatsApp & get leads',
   'region.MY': 'Malaysia',
   'region.SG': 'Singapore',
   'tool.select': 'Select',
@@ -196,6 +205,15 @@ const ms: Dict = {
   'dashboard.published': 'Diterbitkan',
   'dashboard.draft': 'Draf',
   'dashboard.confirmDelete': 'Padam projek ini? Tindakan ini tidak boleh dibatalkan.',
+  'dashboard.edited': 'Disunting {time}',
+  'dashboard.open': 'Buka',
+  'home.eyebrow': 'Studio hartanah & reka bentuk dalaman',
+  'home.title': 'Jadikan mana-mana pelan lantai rumah yang boleh dilawati pembeli.',
+  'home.body': 'Surih pelan, hiasi dengan perabot 3D sebenar, kemudian kongsi lawatan 360° fotorealistik di WhatsApp dan dapatkan setiap prospek.',
+  'home.step1': 'Muat naik & surih pelan lantai',
+  'home.step2': 'Hiasi dalam 2D dan 3D',
+  'home.step3': 'Jana Real View 360°',
+  'home.step4': 'Kongsi di WhatsApp & dapatkan prospek',
   'region.MY': 'Malaysia',
   'region.SG': 'Singapura',
   'tool.select': 'Pilih',
@@ -368,6 +386,15 @@ const zh: Dict = {
   'dashboard.published': '已发布',
   'dashboard.draft': '草稿',
   'dashboard.confirmDelete': '确定删除此项目？此操作无法撤销。',
+  'dashboard.edited': '编辑于{time}',
+  'dashboard.open': '打开',
+  'home.eyebrow': '房产与室内设计工作室',
+  'home.title': '把任何平面图，变成买家可以走进去看的家。',
+  'home.body': '描绘平面图，摆放真实3D家具，再通过WhatsApp分享逼真的360°导览，不错过每一位潜在客户。',
+  'home.step1': '上传并描绘平面图',
+  'home.step2': '在2D和3D中布置家具',
+  'home.step3': '生成实景360°',
+  'home.step4': 'WhatsApp分享并获取客户',
   'region.MY': '马来西亚',
   'region.SG': '新加坡',
   'tool.select': '选择',
@@ -573,8 +600,20 @@ export function useI18n(): I18n {
   return ctx;
 }
 
-export function LangSwitcher() {
+/** EN / BM / 中文 buttons, or a small dropdown (`compact`) where space is tight. */
+export function LangSwitcher({ compact = false }: { compact?: boolean }) {
   const { lang, setLang } = useI18n();
+  if (compact) {
+    return (
+      <select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value as Lang)} aria-label="Language">
+        {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
+          <option key={l} value={l}>
+            {LANG_LABELS[l]}
+          </option>
+        ))}
+      </select>
+    );
+  }
   return (
     <div className="seg seg-sm" role="group" aria-label="Language">
       {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (

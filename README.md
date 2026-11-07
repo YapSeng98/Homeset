@@ -34,8 +34,9 @@ GitHub Pages only hosts static files, so the demo is a browser-only build: `apps
 |---|---|
 | Floor plan | Upload JPG/PNG/WebP, set scale by clicking a known dimension, trace walls with snapping (corners, walls, right angles, alignment), type exact lengths |
 | 2D editor | Walls, doors, sliding doors, windows, openings, rooms detected automatically with area in sq ft and m², furniture that snaps against walls, undo/redo, autosave |
-| 3D | Dollhouse view and first-person walk (WASD, drag to look, double-click to walk, phone joystick, wall collision) |
-| Realism | Photoscanned furniture (Poly Haven, CC0), fabric/wood/stone materials, skirting, curtains, ceiling lights, ambient occlusion, sky |
+| 3D | Dollhouse view and first-person walk: true-to-size lens (scroll to widen), enters each room from the doorway, shows the room's size, WASD / drag to look / double-click to walk / phone joystick, wall collision |
+| Realism | Photoscanned furniture (Poly Haven, CC0), fabric/wood/stone materials, skirting, curtains, recessed downlights, window daylight and sun through glass, ceiling bounce light, ambient occlusion, sky |
+| Design | Evergreen + brass brand, Fraunces display and Plus Jakarta Sans UI fonts (bundled, no font CDN), phone-first buyer tour with a bottom sheet for the agent |
 | HD Photo | Path-traced photoreal still of any view (despeckle + denoise), downloadable JPG for listing portals. About 2.5 min on an Apple M2 |
 | Real View 360° | Path-traced panorama per room; buyers step between rooms via doorway markers (Street View style). Standard quality ≈ 90 s per room on an M2. Some grain remains at these settings; cloud GPU rendering is the production path |
 | Selling | Publish a tour with REN/REA (MY) or CEA (SG) details, share via link, QR code or WhatsApp, PDPA-consented enquiry form |

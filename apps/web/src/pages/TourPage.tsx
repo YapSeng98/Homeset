@@ -6,6 +6,7 @@ import { api, type PublicTour } from '../api';
 import { BROWSER_ONLY } from '../env';
 import { LangSwitcher, useI18n } from '../i18n';
 import { Icons } from '../components/Icons';
+import { LogoMark } from '../components/Logo';
 import { Viewer3D } from '../components/Viewer3D';
 import { PanoramaView, panoramaStops } from '../components/PanoramaView';
 import { RoomSize } from '../components/RoomSize';
@@ -98,7 +99,15 @@ export function TourPage() {
         <p style={{ maxWidth: 420, padding: '0 16px', textAlign: 'center' }}>{t(BROWSER_ONLY ? 'demo.tourMissing' : 'tour.notFound')}</p>
       </div>
     );
-  if (!tour) return <div className="center-msg">{t('tour.loading')}</div>;
+  if (!tour)
+    return (
+      <div className="center-msg">
+        <div className="loading">
+          <LogoMark />
+          <span>{t('tour.loading')}</span>
+        </div>
+      </div>
+    );
 
   const { listing, agent } = tour;
   const region = REGIONS[tour.region];
@@ -139,36 +148,41 @@ export function TourPage() {
       )}
 
       <div className="tour-top">
-        <div className="listing-card">
-          <h1>{listing.title}</h1>
+        <header className="listing-card">
+          <span className="eyebrow">{listing.listingType === 'rent' ? t('publish.rent') : t('publish.sale')}</span>
+          <h1 title={listing.title}>{listing.title}</h1>
           {listing.price !== undefined && (
             <div className="listing-price">
               {formatMoney(listing.price, tour.region)}
-              {listing.listingType === 'rent' ? t('tour.perMonth') : ''}
+              {listing.listingType === 'rent' && <small>{t('tour.perMonth')}</small>}
             </div>
           )}
           <div className="listing-facts">
             {listing.builtUpSqft !== undefined && (
               <span>
-                {listing.builtUpSqft.toLocaleString('en')} {t('tour.builtUp')}
+                <Icons.area /> {listing.builtUpSqft.toLocaleString('en')} {t('tour.builtUp')}
               </span>
             )}
             {listing.bedrooms !== undefined && (
               <span>
-                {listing.bedrooms} {t('tour.beds')}
+                <Icons.bed /> {listing.bedrooms} {t('tour.beds')}
               </span>
             )}
             {listing.bathrooms !== undefined && (
               <span>
-                {listing.bathrooms} {t('tour.baths')}
+                <Icons.bath /> {listing.bathrooms} {t('tour.baths')}
               </span>
             )}
             {listing.tenure && <span>{listing.tenure}</span>}
-            {listing.address && <span>{listing.address}</span>}
           </div>
-        </div>
-        <div className="row" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <div className="seg" style={{ background: 'rgba(255,255,255,0.85)' }}>
+          {listing.address && (
+            <div className="listing-address">
+              <Icons.pin /> {listing.address}
+            </div>
+          )}
+        </header>
+        <div className="tour-controls">
+          <div className="seg seg-glass tour-modes">
             {stops.length > 0 && (
               <button className={mode === 'real' ? 'on' : ''} onClick={() => setMode('real')}>
                 {t('tour.real')}
@@ -181,47 +195,54 @@ export function TourPage() {
               {t('tour.walk')}
             </button>
           </div>
-          <LangSwitcher />
+          <span className="hide-sm">
+            <LangSwitcher />
+          </span>
+          <span className="show-sm">
+            <LangSwitcher compact />
+          </span>
         </div>
       </div>
 
-      {mode !== 'orbit' && <RoomSize room={allRooms.find((r) => r.id === activeRoom)} />}
-      <div className="tour-rooms">
-        {rooms.map((r) => (
-          <button
-            key={r.id}
-            className={activeRoom === r.id ? 'on' : ''}
-            onClick={() => {
-              if (mode === 'real') return void pano.current?.show(r.id);
-              viewer.current?.goToRoom(r.id);
-              setMode('walk');
-            }}
-          >
-            {r.name}
-          </button>
-        ))}
-      </div>
+      <div className="tour-dock">
+        {mode !== 'orbit' && <RoomSize room={allRooms.find((r) => r.id === activeRoom)} />}
+        <div className="tour-rooms">
+          {rooms.map((r) => (
+            <button
+              key={r.id}
+              className={activeRoom === r.id ? 'on' : ''}
+              onClick={() => {
+                if (mode === 'real') return void pano.current?.show(r.id);
+                viewer.current?.goToRoom(r.id);
+                setMode('walk');
+              }}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
 
-      <div className="tour-bottom">
-        <div className="agent-card">
-          <div className="agent-avatar">{initials}</div>
-          <div className="agent-meta">
-            <b>{agent.name}</b>
-            <div>
-              {disclosure.agentRegNo}: {agent.agentRegNo}
-            </div>
-            <div>
-              {agent.agencyName} · {disclosure.agencyRegNo}: {agent.agencyRegNo}
+        <div className="tour-bottom">
+          <div className="agent-card">
+            <div className="agent-avatar">{initials}</div>
+            <div className="agent-meta">
+              <b>{agent.name}</b>
+              <div>
+                {disclosure.agentRegNo}: {agent.agentRegNo}
+              </div>
+              <div>
+                {agent.agencyName} · {disclosure.agencyRegNo}: {agent.agencyRegNo}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <a className="btn btn-wa btn-lg" href={waChatUrl(agent.phone, tour.region, t('tour.whatsappText', { title: listing.title }))} target="_blank" rel="noreferrer">
-            <Icons.whatsapp /> {t('tour.whatsapp')}
-          </a>
-          <button className="btn btn-primary btn-lg" onClick={() => setLeadOpen(true)}>
-            {t('tour.enquire')}
-          </button>
+          <div className="tour-actions">
+            <a className="btn btn-wa btn-lg" href={waChatUrl(agent.phone, tour.region, t('tour.whatsappText', { title: listing.title }))} target="_blank" rel="noreferrer">
+              <Icons.whatsapp /> {t('tour.whatsapp')}
+            </a>
+            <button className="btn btn-primary btn-lg" onClick={() => setLeadOpen(true)}>
+              {t('tour.enquire')}
+            </button>
+          </div>
         </div>
       </div>
 

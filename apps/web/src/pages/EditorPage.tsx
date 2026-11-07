@@ -194,7 +194,7 @@ function Editor({ project, store }: { project: Project; store: EditorStore }) {
           onBlur={() => store.seal()}
           aria-label="Project name"
         />
-        <span className={`small ${state.save === 'error' ? 'error' : 'muted'}`} style={{ minWidth: 64 }}>
+        <span className={`small save-state ${state.save} ${state.save === 'error' ? 'error' : 'muted'}`}>
           {t(saveLabel[state.save])}
         </span>
         <button className="btn btn-ghost btn-icon" disabled={!state.canUndo} onClick={() => store.undo()} aria-label="Undo">
