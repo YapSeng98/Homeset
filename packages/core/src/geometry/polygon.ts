@@ -14,6 +14,15 @@ export function signedArea(poly: Vec2[]): number {
 
 export const area = (poly: Vec2[]): number => Math.abs(signedArea(poly));
 
+/** Width and depth of a rectangular room (its bounding box), or null for L-shapes and other outlines. */
+export function rectangleSize(poly: Vec2[]): [number, number] | null {
+  const xs = poly.map((p) => p[0]);
+  const ys = poly.map((p) => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs);
+  const d = Math.max(...ys) - Math.min(...ys);
+  return w > 0 && d > 0 && area(poly) / (w * d) > 0.97 ? [w, d] : null;
+}
+
 export function centroid(poly: Vec2[]): Vec2 {
   const a = signedArea(poly);
   if (Math.abs(a) < 1e-9) {

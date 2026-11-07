@@ -31,6 +31,13 @@ const EXTERIOR_WALL = '#e6e1d8';
 const WALL_CAP = '#d2cdc5';
 const FRAME = '#f2f0ec';
 
+export interface RoomEntry {
+  /** Just inside the doorway (world, m). */
+  stand: THREE.Vector3;
+  /** Unit vector pointing into the room. */
+  facing: THREE.Vector3;
+}
+
 export interface RoomInfo {
   id: string;
   name: string;
@@ -38,11 +45,19 @@ export interface RoomInfo {
   polygon: Vec2[];
   /** Good standing point (m). */
   anchor: THREE.Vector3;
+  /** Where a visitor stands on walking in, one per doorway. */
+  entries: RoomEntry[];
 }
 
 export interface BuiltLevel {
   group: THREE.Group;
+  /** Interior-only parts shown in walk mode: ceilings, room lights, window daylight. */
   ceilings: THREE.Group;
+  /**
+   * Real-time stand-ins for indirect light in walk mode: daylight coming in at each outside window,
+   * and light bounced off the floor onto the ceiling. The path tracer leaves them out: it computes the real thing.
+   */
+  fill: THREE.Group;
   /** Plan-space blocking outlines (m) for walk-mode collision. */
   colliders: Vec2[][];
   /** Furniture footprints as circles (world XZ, m), used to pick clear standing spots. */
@@ -65,6 +80,9 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
   const ceilings = new THREE.Group();
   ceilings.name = 'ceilings';
   group.add(ceilings);
+  const fill = new THREE.Group();
+  fill.name = 'fill';
+  ceilings.add(fill);
   const colliders: Vec2[][] = [];
   const elevation = level.elevation * M;
   group.position.y = elevation;
@@ -100,16 +118,17 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
       // Anything between knee and head height blocks walking.
       if (piece.bottom < 1700 && piece.top > 300) colliders.push(piece.footprint.map((p) => [p[0] * M, p[1] * M] as Vec2));
     }
-    addOpenings(group, fp, level, height, mats);
+    addOpenings(group, fill, fp, level, height, mats);
   }
 
   // Floors, ceilings, skirting and lighting
   const roomInfos: RoomInfo[] = [];
   const ceilingMat = mats.ceiling();
   const doorGaps = doorwaySegments(footprints, level);
+  const entries = roomEntries(footprints, level, elevation);
   for (const room of level.rooms) {
     addSkirting(group, room, doorGaps, mats);
-    addRoomLighting(ceilings, room, level.height * M, mats);
+    addRoomLighting(ceilings, fill, room, level.height * M, mats);
     const floor = new THREE.Mesh(flatPolygon(room.polygon, 0.001), mats.get(room.floorMaterial ?? level.defaultFloorMaterial));
     floor.receiveShadow = true;
     floor.userData = { kind: 'floor', id: room.id };
@@ -123,6 +142,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
       name: room.name,
       polygon: room.polygon.map((p) => [p[0] * M, p[1] * M] as Vec2),
       anchor: toWorld(lp, elevation),
+      entries: entries.get(room.id) ?? [],
     });
   }
 
@@ -156,7 +176,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
   const bounds = new THREE.Box3().setFromObject(group);
   if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5));
   const ready = Promise.all(pending).then(() => undefined);
-  return { group, ceilings, colliders, obstacles, rooms: roomInfos, bounds, ready };
+  return { group, ceilings, fill, colliders, obstacles, rooms: roomInfos, bounds, ready };
 }
 
 function withShadows<T extends THREE.Object3D>(obj: T): T {
@@ -222,6 +242,28 @@ function doorwaySegments(footprints: Map<string, WallFootprint>, level: Level): 
   return gaps;
 }
 
+/** Where a visitor stands on walking into each room: 45 cm inside every floor-level opening, facing in. */
+function roomEntries(footprints: Map<string, WallFootprint>, level: Level, elevation: number): Map<string, RoomEntry[]> {
+  const entries = new Map<string, RoomEntry[]>();
+  for (const fp of footprints.values()) {
+    const f = fp.frame;
+    for (const span of openingSpans(f, level.openings, f.wall.height ?? level.height)) {
+      if (span.bottom >= 1) continue;
+      const centre = add(f.wall.a, scale(f.dir, (span.start + span.end) / 2));
+      for (const sign of [1, -1]) {
+        const inward = scale(f.normal, sign);
+        const stand = add(centre, scale(inward, f.half + 450));
+        const room = roomAt(level.rooms, stand);
+        if (!room) continue;
+        const list = entries.get(room.id) ?? [];
+        list.push({ stand: toWorld(stand, elevation), facing: new THREE.Vector3(inward[0], 0, inward[1]) });
+        entries.set(room.id, list);
+      }
+    }
+  }
+  return entries;
+}
+
 const SKIRTING_H = 90;
 const SKIRTING_T = 12;
 
@@ -272,14 +314,24 @@ const downlightGeom = new THREE.CircleGeometry(0.045, 20).rotateX(Math.PI / 2);
 downlightGeom.userData.shared = true;
 
 /** A warm ceiling light per room plus visible recessed downlights (shown with the ceilings in walk mode). */
-function addRoomLighting(ceilings: THREE.Group, room: Room, ceilingY: number, mats: MaterialLibrary) {
+function addRoomLighting(ceilings: THREE.Group, fill: THREE.Group, room: Room, ceilingY: number, mats: MaterialLibrary) {
   const poly = room.polygon.map((p) => [p[0] * M, p[1] * M] as Vec2);
   const areaM2 = Math.abs(signedArea(poly));
   const centre = labelPoint(poly);
   // Neutral-warm (~4000K), the most common LED choice in MY/SG homes and kind to listing photos.
-  const light = new THREE.PointLight('#fff0dc', Math.min(9, 2 + areaM2 * 0.3), 0, 2);
-  light.position.set(centre[0], ceilingY - 0.3, centre[1]);
-  ceilings.add(light);
+  // Recessed lights shine down: floor and lower walls are lit, the ceiling only gets bounce light (no hot spot).
+  const intensity = Math.min(10, 2.5 + areaM2 * 0.35);
+  const light = new THREE.SpotLight('#fff0dc', intensity, 0, 1.15, 0.9, 2);
+  light.userData.roomLight = true;
+  light.position.set(centre[0], ceilingY - 0.02, centre[1]);
+  light.target.position.set(centre[0], 0, centre[1]);
+  ceilings.add(light, light.target);
+  // That bounce: the lit floor brightens the ceiling, most above the middle of the room.
+  // Aimed up from table height, so it reaches the ceiling and upper walls but not the undersides of furniture.
+  const bounce = new THREE.SpotLight('#f6eee4', intensity * 1.3, 0, 1.4, 1, 2);
+  bounce.position.set(centre[0], 1.2, centre[1]);
+  bounce.target.position.set(centre[0], ceilingY, centre[1]);
+  fill.add(bounce, bounce.target);
 
   const xs = poly.map((p) => p[0]);
   const zs = poly.map((p) => p[1]);
@@ -333,7 +385,7 @@ function addCurtains(holder: THREE.Group, width: number, side: 1 | -1, wallHalf:
   holder.add(rod);
 }
 
-function addOpenings(group: THREE.Group, fp: WallFootprint, level: Level, wallHeight: number, mats: MaterialLibrary) {
+function addOpenings(group: THREE.Group, fill: THREE.Group, fp: WallFootprint, level: Level, wallHeight: number, mats: MaterialLibrary) {
   const { frame } = fp;
   const thickness = frame.wall.thickness * M;
   const frameMat = mats.color(FRAME, 0.5);
@@ -384,21 +436,32 @@ function addOpenings(group: THREE.Group, fp: WallFootprint, level: Level, wallHe
       const plus = roomAt(level.rooms, add(centre, scale(frame.normal, probe)));
       const minus = roomAt(level.rooms, add(centre, scale(frame.normal, -probe)));
       const inside = plus && !minus ? plus : minus && !plus ? minus : undefined;
+      const side = inside === plus ? 1 : -1;
       if (inside && CURTAIN_ROOMS.has(inside.type) && width >= 0.9) {
-        addCurtains(holder, width, inside === plus ? 1 : -1, thickness / 2, level.height * M, mats);
+        addCurtains(holder, width, side, thickness / 2, level.height * M, mats);
+      }
+      if (inside) {
+        // Sky light through the opening: brightest by the window, fading across the room.
+        const light = new THREE.RectAreaLight('#f3f7ff', 6, width, height);
+        light.position.set(0, bottom + height / 2, side * (thickness / 2 + 0.03));
+        // Area lights shine along their -Z: turn it to face into the room.
+        light.rotation.y = side > 0 ? Math.PI : 0;
+        holder.add(light);
+        fill.attach(light);
       }
     }
+    // Glass lets the sun through, so it casts no shadow.
     if (o.kind === 'window') {
       part(frameMat, width, t, thickness + 0.02, 0, bottom, 0);
       part(frameMat, t * 0.7, height, 0.05, 0, bottom, 0);
-      part(mats.glass(), width - 2 * t, height - 2 * t, 0.008, 0, bottom + t, 0);
+      part(mats.glass(), width - 2 * t, height - 2 * t, 0.008, 0, bottom + t, 0).castShadow = false;
     } else if (o.kind === 'sliding-door') {
       const panelW = (width - 2 * t) / 2 + 0.03;
       const glassMat = mats.glass();
       const rail = mats.color('#9a9a9a', 0.4, 0.6);
-      part(glassMat, panelW, height - t, 0.01, -width / 4 + 0.15, bottom, -0.02);
+      part(glassMat, panelW, height - t, 0.01, -width / 4 + 0.15, bottom, -0.02).castShadow = false;
       part(rail, 0.03, height - t, 0.04, -width / 4 + 0.15 + panelW / 2, bottom, -0.02);
-      part(glassMat, panelW, height - t, 0.01, width / 4, bottom, 0.02);
+      part(glassMat, panelW, height - t, 0.01, width / 4, bottom, 0.02).castShadow = false;
       part(rail, 0.03, height - t, 0.04, width / 4 - panelW / 2, bottom, 0.02);
     } else {
       // Swing door, shown open at 90° so walkthroughs can pass.

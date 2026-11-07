@@ -8,6 +8,7 @@ import { LangSwitcher, useI18n } from '../i18n';
 import { Icons } from '../components/Icons';
 import { Viewer3D } from '../components/Viewer3D';
 import { PanoramaView, panoramaStops } from '../components/PanoramaView';
+import { RoomSize } from '../components/RoomSize';
 
 type TourMode = ViewMode | 'real';
 import { waChatUrl } from '../components/whatsapp';
@@ -184,6 +185,7 @@ export function TourPage() {
         </div>
       </div>
 
+      {mode !== 'orbit' && <RoomSize room={allRooms.find((r) => r.id === activeRoom)} />}
       <div className="tour-rooms">
         {rooms.map((r) => (
           <button

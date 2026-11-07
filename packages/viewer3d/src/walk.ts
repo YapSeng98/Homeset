@@ -17,9 +17,13 @@ export class WalkControls {
   readonly position = new THREE.Vector3();
   colliders: Vec2[][] = [];
   floorY = 0;
+  /** Mouse-wheel lens adjustment: 1 is the natural lens, above 1 wider (to take in a small room), below 1 closer. */
+  fovScale = 1;
+  private lensChanged = false;
 
   private keys = new Set<string>();
   private stick = new THREE.Vector2();
+  private velocity = new THREE.Vector3();
   private dragging: { id: number; x: number; y: number } | null = null;
   private target: THREE.Vector3 | null = null;
   private joystick: HTMLDivElement;
@@ -54,6 +58,7 @@ export class WalkControls {
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
     dom.addEventListener('dblclick', this.onDoubleClick);
+    dom.addEventListener('wheel', this.onWheel, { passive: false });
     this.joystick.addEventListener('pointerdown', this.onStick);
     this.joystick.addEventListener('pointermove', this.onStick);
     this.joystick.addEventListener('pointerup', this.onStickEnd);
@@ -66,6 +71,7 @@ export class WalkControls {
     this.joystick.style.display = on && touch ? 'block' : 'none';
     this.keys.clear();
     this.stick.set(0, 0);
+    this.velocity.set(0, 0, 0);
     this.target = null;
   }
 
@@ -79,6 +85,7 @@ export class WalkControls {
     }
     this.pitch = -0.05;
     this.target = null;
+    this.velocity.set(0, 0, 0);
     this.apply();
   }
 
@@ -96,29 +103,37 @@ export class WalkControls {
     const turning = this.keys.has('ArrowLeft') || this.keys.has('ArrowRight');
     const fast = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 2 : 1;
 
-    const before = this.position.clone();
+    const want = new THREE.Vector3();
     if (move.lengthSq() > 0) {
       this.target = null;
       if (move.length() > 1) move.normalize();
       const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
       const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-      this.position.addScaledVector(fwd, move.y * SPEED * fast * dt).addScaledVector(right, move.x * SPEED * fast * dt);
+      want.addScaledVector(fwd, move.y * SPEED * fast).addScaledVector(right, move.x * SPEED * fast);
     } else if (this.target) {
       const to = new THREE.Vector3(this.target.x - this.position.x, 0, this.target.z - this.position.z);
       const d = to.length();
       if (d < 0.05) this.target = null;
       else {
-        const step = Math.min(d, SPEED * 1.5 * dt);
-        this.position.addScaledVector(to.normalize(), step);
+        // Slow down on arrival, like a person stopping.
+        want.copy(to).normalize().multiplyScalar(Math.min(SPEED * 1.5, d * 3));
         const wantYaw = Math.atan2(-to.x, -to.z);
         let dy = wantYaw - this.yaw;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         this.yaw += dy * Math.min(1, dt * 4);
       }
     }
+    // Ease into and out of walking, not starting and stopping instantly.
+    this.velocity.lerp(want, 1 - Math.exp(-dt * 8));
+    if (want.lengthSq() === 0 && this.velocity.lengthSq() < 1e-4) this.velocity.set(0, 0, 0);
+
+    const before = this.position.clone();
+    this.position.addScaledVector(this.velocity, dt);
     this.collide();
     this.apply();
-    return turning || this.position.distanceToSquared(before) > 1e-10;
+    const lens = this.lensChanged;
+    this.lensChanged = false;
+    return turning || lens || this.position.distanceToSquared(before) > 1e-10;
   }
 
   private apply(): void {
@@ -199,6 +214,13 @@ export class WalkControls {
     if (this.enabled) this.walkTo(e.clientX, e.clientY);
   };
 
+  private onWheel = (e: WheelEvent) => {
+    if (!this.enabled) return;
+    e.preventDefault();
+    this.fovScale = THREE.MathUtils.clamp(this.fovScale * Math.exp(e.deltaY * 0.001), 0.7, 1.4);
+    this.lensChanged = true;
+  };
+
   private walkTo(clientX: number, clientY: number) {
     const rect = this.dom.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
@@ -249,6 +271,7 @@ export class WalkControls {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     this.dom.removeEventListener('dblclick', this.onDoubleClick);
+    this.dom.removeEventListener('wheel', this.onWheel);
     this.joystick.remove();
   }
 }

@@ -7,6 +7,7 @@ import { TEST_HOOKS } from '../env';
 import { LangSwitcher, useI18n, type MessageKey } from '../i18n';
 import { Icons } from '../components/Icons';
 import { Viewer3D } from '../components/Viewer3D';
+import { RoomSize } from '../components/RoomSize';
 import { EditorStore, useEditor, type Tool, type ViewKind } from '../editor/store';
 import { PlanCanvas } from '../editor/PlanCanvas';
 import { SidePanel } from '../editor/SidePanel';
@@ -289,6 +290,7 @@ function Editor({ project, store }: { project: Project; store: EditorStore }) {
                 onReady={(v) => (viewerRef.current = v)}
                 onRoomChange={setActiveRoom}
               />
+              {state.view === 'walk' && <RoomSize room={level.rooms.find((r) => r.id === activeRoom)} />}
               <div className="room-chips">
                 {level.rooms.map((r) => (
                   <button

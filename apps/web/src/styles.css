@@ -197,6 +197,10 @@ textarea.input { height: auto; padding: 8px 10px; resize: vertical; }
 .tour-rooms { position: absolute; left: 50%; transform: translateX(-50%); bottom: 86px; display: flex; gap: 6px; max-width: calc(100% - 24px); overflow-x: auto; z-index: 3; padding: 2px; }
 .tour-rooms button { flex: none; background: rgba(255, 255, 255, 0.92); border: 0; border-radius: 16px; height: 32px; padding: 0 14px; cursor: pointer; font-weight: 500; box-shadow: var(--shadow); }
 .tour-rooms button.on { background: var(--brand); color: #fff; }
+.room-size { position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 10px; background: rgba(22, 26, 30, 0.7); color: #fff; font-size: 12.5px; white-space: nowrap; backdrop-filter: blur(6px); box-shadow: var(--shadow); pointer-events: none; }
+.room-size strong { font-size: 14px; font-weight: 600; }
+.stage .room-size { top: 12px; left: 12px; }
+.tour .room-size { left: 50%; transform: translateX(-50%); bottom: 128px; }
 .watermark { position: absolute; right: 14px; top: 50%; transform: rotate(-90deg) translateX(50%); transform-origin: right top; font-size: 11px; color: rgba(0, 0, 0, 0.35); z-index: 2; pointer-events: none; }
 .center-msg { position: fixed; inset: 0; display: grid; place-items: center; color: var(--text-2); }
 
@@ -213,5 +217,6 @@ textarea.input { height: auto; padding: 8px 10px; resize: vertical; }
 @media (max-width: 600px) {
   .tour-bottom { flex-direction: column; align-items: stretch; }
   .tour-rooms { bottom: 150px; }
+  .tour .room-size { bottom: 192px; }
   .listing-card { max-width: none; }
 }

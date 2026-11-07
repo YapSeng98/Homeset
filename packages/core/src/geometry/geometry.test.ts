@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Opening, Vec2, Wall } from '../schema';
-import { area } from './polygon';
+import { area, rectangleSize } from './polygon';
 import { detectRoomPolygons, syncRooms } from './rooms';
 import { computeWallFootprints, lineOfSight, wallPieces } from './walls';
 
@@ -18,6 +18,13 @@ const close = (p: Vec2, q: Vec2) => {
   expect(p[0]).toBeCloseTo(q[0], 3);
   expect(p[1]).toBeCloseTo(q[1], 3);
 };
+
+describe('rectangleSize', () => {
+  it('measures rectangular rooms and skips L-shapes', () => {
+    expect(rectangleSize([[0, 0], [3600, 0], [3600, 3200], [0, 3200]])).toEqual([3600, 3200]);
+    expect(rectangleSize([[0, 0], [4000, 0], [4000, 2000], [2000, 2000], [2000, 4000], [0, 4000]])).toBeNull();
+  });
+});
 
 describe('computeWallFootprints', () => {
   it('miters an L corner so outer and inner corners meet exactly', () => {

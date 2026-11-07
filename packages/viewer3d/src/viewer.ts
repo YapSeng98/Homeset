@@ -6,8 +6,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { distanceToPolygonEdge, pointInPolygon, type HomeModel, type Registry, type Vec2 } from '@homeset/core';
-import { buildLevel, type BuiltLevel, type RoomInfo } from './house';
+import { buildLevel, type BuiltLevel, type RoomEntry, type RoomInfo } from './house';
 import { MaterialLibrary } from './materials';
 import { WalkControls } from './walk';
 
@@ -107,6 +108,19 @@ function rayToEdge(poly: Vec2[], ox: number, oz: number, dx: number, dz: number)
   return best;
 }
 
+let areaLightsReady = false;
+
+/** Room-light output in path-traced photos, relative to the real-time view (see pathTrace). */
+const PATH_TRACE_ROOM_LIGHT = 3;
+
+/** Walk-mode lens: about 75° across, like a 24 mm property-photo lens, so rooms look their real size. */
+export function walkFov(aspect: number): number {
+  const across = THREE.MathUtils.degToRad(75);
+  const vertical = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(across / 2) / aspect));
+  // Portrait phones would need a very tall view to get 75° across; cap it before it distorts.
+  return THREE.MathUtils.clamp(vertical, 45, 70);
+}
+
 /**
  * Framework-free 3D viewer for a Home Model: dollhouse (orbit) view, first-person walkthrough,
  * and path-traced HD photos. Used by the editor, the public tour page, and later kiosks and embeds.
@@ -143,6 +157,10 @@ export class HouseViewer {
     private readonly opts: HouseViewerOptions,
   ) {
     this.quality = opts.quality ?? defaultQuality();
+    if (!areaLightsReady) {
+      RectAreaLightUniformsLib.init();
+      areaLightsReady = true;
+    }
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -228,10 +246,14 @@ export class HouseViewer {
     this.orbit.enabled = mode === 'orbit';
     this.walk.setEnabled(mode === 'walk');
     if (this.built) this.built.ceilings.visible = mode === 'walk';
-    this.camera.fov = mode === 'walk' ? 72 : 50;
+    this.camera.fov = mode === 'walk' ? this.walkLens() : 50;
     this.camera.updateProjectionMatrix();
-    this.hemi.intensity = mode === 'walk' ? 0.6 : 0.45;
-    this.scene.environmentIntensity = mode === 'walk' ? 0.5 : 0.4;
+    // Inside, light should come from the windows and ceiling lights, not from everywhere at once.
+    // Phones skip the window and bounce lights (see BuiltLevel.fill), so they keep more flat fill light.
+    const fill = this.quality === 'high';
+    this.hemi.intensity = mode === 'walk' ? (fill ? 0.3 : 0.55) : 0.45;
+    this.scene.environmentIntensity = mode === 'walk' ? (fill ? 0.35 : 0.5) : 0.4;
+    this.renderer.toneMappingExposure = mode === 'walk' ? 1.05 : 0.95;
     // Inside, windows look out onto a sky; the dollhouse sits in a clean studio.
     this.scene.background = mode === 'walk' ? this.mats.sky() : this.studioBackground;
     if (mode === 'walk') {
@@ -247,8 +269,8 @@ export class HouseViewer {
   }
 
   /**
-   * Walk mode: stand where a property photographer would, a clear spot with the widest
-   * view across the room, and look towards its centre.
+   * Walk mode: step in the way a visitor would, just inside the doorway with the widest view,
+   * looking into the room. Rooms without a clear doorway use the spot a property photographer would.
    */
   goToRoom(roomId: string): void {
     const room = this.rooms.find((r) => r.id === roomId);
@@ -256,6 +278,12 @@ export class HouseViewer {
     if (this.mode !== 'walk') this.setMode('walk');
     const poly = room.polygon;
     const centre = room.anchor;
+    const entry = this.bestEntry(room);
+    if (entry) {
+      this.walk.placeAt(entry.stand, entry.stand.clone().add(new THREE.Vector3(Math.cos(entry.heading), 0, Math.sin(entry.heading))));
+      this.dirty = true;
+      return;
+    }
     const obstacles = this.built?.obstacles ?? [];
     const xs = poly.map((p) => p[0]);
     const zs = poly.map((p) => p[1]);
@@ -298,6 +326,36 @@ export class HouseViewer {
     }
     this.walk.placeAt(stand, lookAt);
     this.dirty = true;
+  }
+
+  /**
+   * The doorway with the longest view into the room (among those not blocked by furniture), and the
+   * direction of that view: up to 45° off straight ahead, so a bedroom is seen across its diagonal.
+   */
+  private bestEntry(room: RoomInfo): { stand: RoomEntry['stand']; heading: number } | undefined {
+    const obstacles = this.built?.obstacles ?? [];
+    const view = (x: number, z: number, heading: number) => {
+      let sum = 0;
+      for (let k = -2; k <= 2; k++) sum += Math.min(rayToEdge(room.polygon, x, z, Math.cos(heading + k * 0.15), Math.sin(heading + k * 0.15)), 9);
+      return sum / 5;
+    };
+    let best: { stand: RoomEntry['stand']; heading: number } | undefined;
+    let bestScore = -Infinity;
+    for (const entry of room.entries) {
+      const { x, z } = entry.stand;
+      if (!pointInPolygon([x, z], room.polygon) || distanceToPolygonEdge([x, z], room.polygon) < 0.3) continue;
+      if (obstacles.some((o) => Math.hypot(x - o.x, z - o.z) - o.r < 0.15)) continue;
+      const ahead = Math.atan2(entry.facing.z, entry.facing.x);
+      for (let turn = -0.8; turn <= 0.8 + 1e-9; turn += 0.1) {
+        // Prefer looking straight in when the views are about as long.
+        const score = view(x, z, ahead + turn) - 0.4 * Math.abs(turn);
+        if (score > bestScore) {
+          bestScore = score;
+          best = { stand: entry.stand, heading: ahead + turn };
+        }
+      }
+    }
+    return best;
   }
 
   /** Fits the whole house in view for the current screen shape (portrait phones included). */
@@ -387,6 +445,17 @@ export class HouseViewer {
       hemi: this.hemi.visible,
       ceilings: this.built?.ceilings.visible ?? false,
     };
+    // The path tracer computes real daylight and bounce light; the real-time stand-ins would double them.
+    const fill = this.built?.fill;
+    const fillParent = fill?.parent;
+    fill?.removeFromParent();
+    // Each room light stands in for the room's several recessed fittings; without the stand-in fill,
+    // give it their combined output.
+    const roomLights: [THREE.Light, number][] = [];
+    this.built?.ceilings.traverse((o) => {
+      if (o.userData.roomLight) roomLights.push([o as THREE.Light, (o as THREE.Light).intensity]);
+    });
+    for (const [light, intensity] of roomLights) light.intensity = intensity * PATH_TRACE_ROOM_LIGHT;
     this.photoActive = true;
     this.walk.enabled = false;
     this.orbit.enabled = false;
@@ -435,6 +504,8 @@ export class HouseViewer {
       this.scene.background = saved.background;
       this.hemi.visible = saved.hemi;
       if (this.built) this.built.ceilings.visible = saved.ceilings;
+      if (fill && fillParent) fillParent.add(fill);
+      for (const [light, intensity] of roomLights) light.intensity = intensity;
       this.walk.enabled = this.mode === 'walk';
       this.orbit.enabled = this.mode === 'orbit';
       this.photoActive = false;
@@ -529,6 +600,7 @@ export class HouseViewer {
     if (!this.model || !level) return;
     this.built = buildLevel(level, this.opts.registry, this.mats, () => (this.dirty = true));
     this.built.ceilings.visible = this.mode === 'walk';
+    this.built.fill.visible = this.quality === 'high';
     this.scene.add(this.built.group);
     this.walk.colliders = this.built.colliders;
     this.walk.floorY = level.elevation / 1000;
@@ -579,8 +651,14 @@ export class HouseViewer {
     this.composer?.setPixelRatio(this.renderer.getPixelRatio());
     this.composer?.setSize(w, h);
     this.camera.aspect = w / h;
+    if (this.mode === 'walk') this.camera.fov = this.walkLens();
     this.camera.updateProjectionMatrix();
     this.dirty = true;
+  }
+
+  /** Walk-mode vertical field of view: the natural lens for this screen shape, times the wheel setting. */
+  private walkLens(): number {
+    return walkFov(this.camera.aspect) * this.walk.fovScale;
   }
 
   private setRoom(id: string | null): void {
@@ -596,6 +674,11 @@ export class HouseViewer {
     if (this.mode === 'orbit') {
       if (this.orbit.update()) this.dirty = true;
     } else if (this.walk.update(dt)) {
+      const fov = this.walkLens();
+      if (fov !== this.camera.fov) {
+        this.camera.fov = fov;
+        this.camera.updateProjectionMatrix();
+      }
       this.dirty = true;
     }
     if (this.mode === 'walk') {
