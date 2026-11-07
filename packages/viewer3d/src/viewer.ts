@@ -7,7 +7,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { distanceToPolygonEdge, pointInPolygon, type HomeModel, type Registry, type Vec2 } from '@homeset/core';
-import { buildLevel, type BuiltLevel, type RoomEntry, type RoomInfo } from './house';
+import { buildLevel, type BuiltLevel, type RoomInfo } from './house';
 import { MaterialLibrary } from './materials';
 import { WalkControls } from './walk';
 
@@ -111,19 +111,24 @@ function rayToEdge(poly: Vec2[], ox: number, oz: number, dx: number, dz: number)
 const PATH_TRACE_ROOM_LIGHT = 3;
 /** Retina screens draw at 1.5× rather than 2×: still sharp, half the pixels of 2× to shade. */
 const MAX_PIXEL_RATIO = 1.5;
-/** After the view stops changing, wait this long, then draw one full-quality frame (ambient occlusion). */
-const SETTLE_MS = 160;
+/** Dollhouse: after the view stops changing, wait this long, then fade in ambient occlusion over AO_FADE_MS. */
+const SETTLE_MS = 120;
+const AO_FADE_MS = 300;
+const AO_STRENGTH = 0.85;
 /** Daylight through the current room's windows, per m² of glass (real-time walk view). */
 const WINDOW_LIGHT = 12;
 /** Ceiling glow standing in for light bounced off the floor (real-time walk view). */
 const CEILING_GLOW = 0.3;
 
-/** Walk-mode lens: about 75° across, like a 24 mm property-photo lens, so rooms look their real size. */
+/**
+ * Walk-mode lens: about 90° across, the usual for walkthroughs. A screen shows far less than the eye takes in,
+ * so a narrower lens makes furniture look too big.
+ */
 export function walkFov(aspect: number): number {
-  const across = THREE.MathUtils.degToRad(75);
+  const across = THREE.MathUtils.degToRad(90);
   const vertical = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(across / 2) / aspect));
-  // Portrait phones would need a very tall view to get 75° across; cap it before it distorts.
-  return THREE.MathUtils.clamp(vertical, 45, 70);
+  // Portrait phones would need a very tall view to get 90° across; cap it before it distorts.
+  return THREE.MathUtils.clamp(vertical, 50, 85);
 }
 
 /**
@@ -224,7 +229,7 @@ export class HouseViewer {
       this.gtao = new GTAOPass(this.scene, this.camera, 1, 1);
       this.gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 2, thickness: 1, scale: 1.1, samples: 16 });
       this.gtao.updatePdMaterial({ radius: 8, samples: 16 });
-      this.gtao.blendIntensity = 0.85;
+      this.gtao.blendIntensity = AO_STRENGTH;
       this.composer.addPass(this.gtao);
       this.composer.addPass(new OutputPass());
     }
@@ -263,6 +268,7 @@ export class HouseViewer {
 
   setMode(mode: ViewMode): void {
     this.mode = mode;
+    this.settleAt = 0;
     this.orbit.enabled = mode === 'orbit';
     this.walk.setEnabled(mode === 'walk');
     if (this.built) this.built.ceilings.visible = mode === 'walk';
@@ -292,63 +298,14 @@ export class HouseViewer {
     this.dirty = true;
   }
 
-  /**
-   * Walk mode: step in the way a visitor would, just inside the doorway with the widest view,
-   * looking into the room. Rooms without a clear doorway use the spot a property photographer would.
-   */
+  /** Walk mode: step into a room where a property photographer would stand (see bestViewpoint). */
   goToRoom(roomId: string): void {
     const room = this.rooms.find((r) => r.id === roomId);
     if (!room) return;
     if (this.mode !== 'walk') this.setMode('walk');
-    const poly = room.polygon;
-    const centre = room.anchor;
-    const entry = this.bestEntry(room);
-    if (entry) {
-      this.walk.placeAt(entry.stand, entry.stand.clone().add(new THREE.Vector3(Math.cos(entry.heading), 0, Math.sin(entry.heading))));
-      this.arrived(room.id);
-      return;
-    }
-    const obstacles = this.built?.obstacles ?? [];
-    const xs = poly.map((p) => p[0]);
-    const zs = poly.map((p) => p[1]);
-    let stand = centre;
-    let bestScore = -Infinity;
-    const step = 0.3;
-    for (let x = Math.min(...xs) + step / 2; x < Math.max(...xs); x += step) {
-      for (let z = Math.min(...zs) + step / 2; z < Math.max(...zs); z += step) {
-        if (!pointInPolygon([x, z], poly) || distanceToPolygonEdge([x, z], poly) < 0.45) continue;
-        const toX = centre.x - x;
-        const toZ = centre.z - z;
-        const toLen = Math.hypot(toX, toZ);
-        // The centre must be in sight (matters in L-shaped rooms).
-        if (toLen > 0.3 && rayToEdge(poly, x, z, toX / toLen, toZ / toLen) < toLen - 0.05) continue;
-        const heading = toLen > 0.3 ? Math.atan2(toZ, toX) : 0;
-        let openness = 0;
-        for (let k = -3; k <= 3; k++) {
-          const a = heading + k * 0.2;
-          openness += Math.min(rayToEdge(poly, x, z, Math.cos(a), Math.sin(a)), 9);
-        }
-        openness /= 7;
-        const clearance = obstacles.reduce((m, o) => Math.min(m, Math.hypot(x - o.x, z - o.z) - o.r), Infinity);
-        const score = openness + (clearance < 0.35 ? clearance * 4 - 2 : Math.min(clearance, 0.8));
-        if (score > bestScore) {
-          bestScore = score;
-          stand = new THREE.Vector3(x, centre.y, z);
-        }
-      }
-    }
-    let lookAt = centre;
-    if (stand.distanceTo(centre) < 0.5) {
-      let far = 0;
-      for (const [x, z] of poly) {
-        const d = Math.hypot(x - stand.x, z - stand.z);
-        if (d > far) {
-          far = d;
-          lookAt = new THREE.Vector3(x, 0, z);
-        }
-      }
-    }
-    this.walk.placeAt(stand, lookAt);
+    const view = this.bestViewpoint(room);
+    if (view) this.walk.placeAt(view.stand, view.stand.clone().add(new THREE.Vector3(Math.cos(view.heading), 0, Math.sin(view.heading))));
+    else this.walk.placeAt(room.anchor);
     this.arrived(room.id);
   }
 
@@ -360,29 +317,60 @@ export class HouseViewer {
   }
 
   /**
-   * The doorway with the longest view into the room (among those not blocked by furniture), and the
-   * direction of that view: up to 45° off straight ahead, so a bedroom is seen across its diagonal.
+   * Where to stand on entering a room, the way a property photographer would: in a doorway or with your back
+   * to a wall, looking along the room's longest view, with no furniture right in front of the camera
+   * (up close it fills the screen and makes everything look huge).
    */
-  private bestEntry(room: RoomInfo): { stand: RoomEntry['stand']; heading: number } | undefined {
+  private bestViewpoint(room: RoomInfo): { stand: THREE.Vector3; heading: number } | undefined {
+    const poly = room.polygon;
     const obstacles = this.built?.obstacles ?? [];
-    const view = (x: number, z: number, heading: number) => {
+    const halfView = THREE.MathUtils.degToRad(40);
+    // Average distance to the walls across the view.
+    const depth = (x: number, z: number, heading: number) => {
       let sum = 0;
-      for (let k = -2; k <= 2; k++) sum += Math.min(rayToEdge(room.polygon, x, z, Math.cos(heading + k * 0.15), Math.sin(heading + k * 0.15)), 9);
-      return sum / 5;
+      for (let k = -4; k <= 4; k++) {
+        const a = heading + (k / 4) * halfView;
+        sum += Math.min(rayToEdge(poly, x, z, Math.cos(a), Math.sin(a)), 9);
+      }
+      return sum / 9;
     };
-    let best: { stand: RoomEntry['stand']; heading: number } | undefined;
+    // Furniture within 1.6 m and inside the view: the closer, the more of the screen it fills.
+    const clutter = (x: number, z: number, heading: number) =>
+      obstacles.reduce((sum, o) => {
+        const gap = Math.hypot(o.x - x, o.z - z) - o.r;
+        const off = Math.atan2(o.z - z, o.x - x) - heading;
+        return gap < 1.6 && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < halfView + 0.2 ? sum + (1.6 - Math.max(gap, 0)) : sum;
+      }, 0);
+
+    const candidates: { x: number; z: number; headings: number[]; bonus: number }[] = [];
+    const around = (centre: number, spread: number, step: number) => {
+      const out: number[] = [];
+      for (let a = -spread; a <= spread + 1e-9; a += step) out.push(centre + a);
+      return out;
+    };
+    // Doorways (stepping in feels natural, so a small bonus), looking up to 45° either side of straight in.
+    for (const e of room.entries) candidates.push({ x: e.stand.x, z: e.stand.z, headings: around(Math.atan2(e.facing.z, e.facing.x), 0.8, 0.1), bonus: 0.3 });
+    // Spots with your back to a wall, looking any way.
+    const xs = poly.map((p) => p[0]);
+    const zs = poly.map((p) => p[1]);
+    const all = around(0, Math.PI, Math.PI / 12).slice(1);
+    for (let x = Math.min(...xs) + 0.125; x < Math.max(...xs); x += 0.25) {
+      for (let z = Math.min(...zs) + 0.125; z < Math.max(...zs); z += 0.25) {
+        const toWall = pointInPolygon([x, z], poly) ? distanceToPolygonEdge([x, z], poly) : 0;
+        if (toWall >= 0.35 && toWall <= 0.9) candidates.push({ x, z, headings: all, bonus: 0 });
+      }
+    }
+
+    let best: { stand: THREE.Vector3; heading: number } | undefined;
     let bestScore = -Infinity;
-    for (const entry of room.entries) {
-      const { x, z } = entry.stand;
-      if (!pointInPolygon([x, z], room.polygon) || distanceToPolygonEdge([x, z], room.polygon) < 0.3) continue;
-      if (obstacles.some((o) => Math.hypot(x - o.x, z - o.z) - o.r < 0.15)) continue;
-      const ahead = Math.atan2(entry.facing.z, entry.facing.x);
-      for (let turn = -0.8; turn <= 0.8 + 1e-9; turn += 0.1) {
-        // Prefer looking straight in when the views are about as long.
-        const score = view(x, z, ahead + turn) - 0.4 * Math.abs(turn);
+    for (const c of candidates) {
+      if (!pointInPolygon([c.x, c.z], poly) || distanceToPolygonEdge([c.x, c.z], poly) < 0.3) continue;
+      if (obstacles.some((o) => Math.hypot(c.x - o.x, c.z - o.z) - o.r < 0.1)) continue;
+      for (const heading of c.headings) {
+        const score = depth(c.x, c.z, heading) - 1.2 * clutter(c.x, c.z, heading) + c.bonus;
         if (score > bestScore) {
           bestScore = score;
-          best = { stand: entry.stand, heading: ahead + turn };
+          best = { stand: new THREE.Vector3(c.x, room.anchor.y, c.z), heading };
         }
       }
     }
@@ -408,6 +396,7 @@ export class HouseViewer {
 
   /** JPEG snapshot of the current real-time view (thumbnails). */
   capture(type = 'image/jpeg', quality = 0.9): string {
+    if (this.gtao) this.gtao.blendIntensity = AO_STRENGTH;
     this.draw();
     return this.renderer.domElement.toDataURL(type, quality);
   }
@@ -669,8 +658,9 @@ export class HouseViewer {
   /**
    * Copies the ceiling lights of the walker's room and the nearest other rooms into the light pool. The pool
    * stays switched on while walking (unused lights at zero), so its size never changes and shaders never recompile.
+   * Rooms that stay lit keep their light; with `fade`, newly lit rooms brighten gradually instead of popping on.
    */
-  private placeRoomLights(): void {
+  private placeRoomLights(fade = false): void {
     const on = this.mode === 'walk';
     const p = this.camera.position;
     const nearest = on
@@ -680,7 +670,7 @@ export class HouseViewer {
           .slice(0, this.roomLights.length)
           .map((r) => r.id)
       : [];
-    const key = `${on}:${nearest.join()}`;
+    const key = `${on}:${[...nearest].sort().join()}`;
     if (key === this.litRooms) return;
     this.litRooms = key;
     const sources = new Map<string, THREE.SpotLight>();
@@ -688,31 +678,55 @@ export class HouseViewer {
     this.built?.ceilings.traverse((o) => {
       if (o.userData.roomLight) sources.set(o.userData.roomId as string, o as THREE.SpotLight);
     });
-    this.roomLights.forEach((light, i) => {
+    const kept = new Set(this.roomLights.map((l) => l.userData.roomId as string | undefined).filter((id) => id && nearest.includes(id)));
+    const incoming = nearest.filter((id) => !kept.has(id));
+    for (const light of this.roomLights) {
       light.visible = on;
-      const source = sources.get(nearest[i] ?? '');
-      light.intensity = source?.intensity ?? 0;
+      if (kept.has(light.userData.roomId)) continue;
+      const id = incoming.shift();
+      const source = id ? sources.get(id) : undefined;
+      light.userData.roomId = id;
+      this.setLight(light, source?.intensity ?? 0, fade);
       if (source) {
         light.position.copy(source.position).applyMatrix4(source.parent!.matrixWorld);
         light.target.position.copy(source.target.position).applyMatrix4(source.parent!.matrixWorld);
         light.target.updateMatrixWorld();
       }
-    });
+    }
     this.dirty = true;
+  }
+
+  /** Sets a pooled light's brightness now, or (`fade`) lets tick() bring it there from dark. */
+  private setLight(light: THREE.Light, intensity: number, fade: boolean): void {
+    light.userData.targetIntensity = intensity;
+    light.intensity = fade ? 0 : intensity;
+  }
+
+  /** Moves faded lights towards their brightness. Returns true while any is still changing. */
+  private fadeLights(dt: number): boolean {
+    let changing = false;
+    for (const light of [...this.roomLights, ...this.windowLights]) {
+      const target = light.userData.targetIntensity as number | undefined;
+      if (target === undefined || light.intensity === target) continue;
+      light.intensity += (target - light.intensity) * Math.min(1, dt * 5);
+      if (Math.abs(target - light.intensity) < 0.02) light.intensity = target;
+      changing = true;
+    }
+    return changing;
   }
 
   /**
    * Daylight through the current room's two largest windows. Both lights stay switched on while walking
    * (unused ones at zero), so the light count never changes and moving between rooms never recompiles shaders.
    */
-  private placeWindowLights(): void {
+  private placeWindowLights(fade = false): void {
     const on = this.mode === 'walk' && this.quality === 'high';
     const room = on ? this.rooms.find((r) => r.id === this.currentRoom) : undefined;
     const windows = [...(room?.windows ?? [])].sort((a, b) => b.width * b.height - a.width * a.height);
     this.windowLights.forEach((light, i) => {
       light.visible = on;
       const w = windows[i];
-      light.intensity = w ? WINDOW_LIGHT * w.width * w.height : 0;
+      this.setLight(light, w ? WINDOW_LIGHT * w.width * w.height : 0, fade);
       if (w) {
         const inward = new THREE.Vector3(-Math.sin(w.rotationY), 0, -Math.cos(w.rotationY));
         // From outside and above the window, onto the floor a couple of metres in.
@@ -770,13 +784,13 @@ export class HouseViewer {
 
   /** Walk-mode vertical field of view: the natural lens for this screen shape, times the wheel setting. */
   private walkLens(): number {
-    return walkFov(this.camera.aspect) * this.walk.fovScale;
+    return Math.min(walkFov(this.camera.aspect) * this.walk.fovScale, 105);
   }
 
-  private setRoom(id: string | null): void {
+  private setRoom(id: string | null, fade = false): void {
     if (id === this.currentRoom) return;
     this.currentRoom = id;
-    this.placeWindowLights();
+    this.placeWindowLights(fade);
     this.opts.onRoomChange?.(id);
   }
 
@@ -800,19 +814,25 @@ export class HouseViewer {
         this.roomTimer = 0;
         const p = this.camera.position;
         const room = this.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
-        this.setRoom(room?.id ?? null);
-        this.placeRoomLights();
+        this.setRoom(room?.id ?? null, true);
+        this.placeRoomLights(true);
       }
+      if (this.fadeLights(dt)) this.dirty = true;
     }
     if (this.dirty) {
       this.dirty = false;
-      if (this.composer) {
-        // While the view moves, draw fast frames; ambient occlusion is added once it settles.
+      if (this.mode === 'walk' || !this.composer) {
+        // Walk mode skips ambient occlusion: it looks almost the same inside and costs two thirds of the frame rate.
+        this.renderer.render(this.scene, this.camera);
+      } else {
+        // Dollhouse: fast frames while it moves, then ambient occlusion fades in once it settles.
         this.renderer.render(this.scene, this.camera);
         this.settleAt = time + SETTLE_MS;
-      } else this.draw();
+      }
     } else if (this.settleAt && time >= this.settleAt) {
-      this.settleAt = 0;
+      const fadeIn = Math.min(1, (time - this.settleAt) / AO_FADE_MS);
+      this.gtao!.blendIntensity = AO_STRENGTH * fadeIn;
+      if (fadeIn >= 1) this.settleAt = 0;
       this.draw();
     }
   }

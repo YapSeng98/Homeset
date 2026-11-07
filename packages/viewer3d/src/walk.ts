@@ -20,6 +20,8 @@ export class WalkControls {
   /** Mouse-wheel lens adjustment: 1 is the natural lens, above 1 wider (to take in a small room), below 1 closer. */
   fovScale = 1;
   private lensChanged = false;
+  /** Set when dragging turned the view; tells the viewer to redraw. */
+  private looked = false;
 
   private keys = new Set<string>();
   private stick = new THREE.Vector2();
@@ -123,17 +125,18 @@ export class WalkControls {
         this.yaw += dy * Math.min(1, dt * 4);
       }
     }
-    // Ease into and out of walking, not starting and stopping instantly.
-    this.velocity.lerp(want, 1 - Math.exp(-dt * 8));
+    // Ease into and out of walking without feeling sluggish: about 50 ms to respond.
+    this.velocity.lerp(want, 1 - Math.exp(-dt * 18));
     if (want.lengthSq() === 0 && this.velocity.lengthSq() < 1e-4) this.velocity.set(0, 0, 0);
 
     const before = this.position.clone();
     this.position.addScaledVector(this.velocity, dt);
     this.collide();
     this.apply();
-    const lens = this.lensChanged;
+    const changed = this.lensChanged || this.looked;
     this.lensChanged = false;
-    return turning || lens || this.position.distanceToSquared(before) > 1e-10;
+    this.looked = false;
+    return turning || changed || this.position.distanceToSquared(before) > 1e-10;
   }
 
   private apply(): void {
@@ -204,6 +207,7 @@ export class WalkControls {
     this.yaw += dx * k;
     this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch + dy * k));
     this.apply();
+    this.looked = true;
   };
 
   private onPointerUp = (e: PointerEvent) => {

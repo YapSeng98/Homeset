@@ -98,6 +98,16 @@ try {
   await b.clickText('Walk');
   await sleep(2500);
   await b.shot('04-sample-walk');
+  // Dragging to look around must redraw while it turns (it once stayed frozen until you walked).
+  await b.evaluate(`(() => { const r = window.__viewer.renderer; window.__renders = 0; const render = r.render.bind(r); r.render = (s, c) => { window.__renders++; return render(s, c); }; return true; })()`);
+  await b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 600, y: 450, button: 'left', clickCount: 1 });
+  for (let i = 1; i <= 10; i++) {
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 600 + i * 12, y: 450, button: 'left', buttons: 1 });
+    await sleep(40);
+  }
+  await b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 720, y: 450, button: 'left', clickCount: 1 });
+  const dragFrames = await b.evaluate('window.__renders');
+  check('Dragging to look around redraws the view', dragFrames >= 5, `${dragFrames} frames during the drag`);
 
   // --- HD photo and Real View (low settings: this checks the pipeline, not image quality)
   const photo = await b.evaluate(`window.__viewer.renderPhoto({ samples: 2 })`);
