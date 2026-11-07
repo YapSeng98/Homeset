@@ -38,6 +38,15 @@ export interface RoomEntry {
   facing: THREE.Vector3;
 }
 
+/** Where daylight comes in: the room side of an outside window or glass door (world, m). */
+export interface RoomWindow {
+  position: THREE.Vector3;
+  /** Turn about Y after which an object's -Z points into the room. */
+  rotationY: number;
+  width: number;
+  height: number;
+}
+
 export interface RoomInfo {
   id: string;
   name: string;
@@ -47,17 +56,13 @@ export interface RoomInfo {
   anchor: THREE.Vector3;
   /** Where a visitor stands on walking in, one per doorway. */
   entries: RoomEntry[];
+  windows: RoomWindow[];
 }
 
 export interface BuiltLevel {
   group: THREE.Group;
-  /** Interior-only parts shown in walk mode: ceilings, room lights, window daylight. */
+  /** Interior-only parts shown in walk mode: ceilings and room lights. */
   ceilings: THREE.Group;
-  /**
-   * Real-time stand-ins for indirect light in walk mode: daylight coming in at each outside window,
-   * and light bounced off the floor onto the ceiling. The path tracer leaves them out: it computes the real thing.
-   */
-  fill: THREE.Group;
   /** Plan-space blocking outlines (m) for walk-mode collision. */
   colliders: Vec2[][];
   /** Furniture footprints as circles (world XZ, m), used to pick clear standing spots. */
@@ -80,9 +85,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
   const ceilings = new THREE.Group();
   ceilings.name = 'ceilings';
   group.add(ceilings);
-  const fill = new THREE.Group();
-  fill.name = 'fill';
-  ceilings.add(fill);
+  const windows = new Map<string, RoomWindow[]>();
   const colliders: Vec2[][] = [];
   const elevation = level.elevation * M;
   group.position.y = elevation;
@@ -118,7 +121,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
       // Anything between knee and head height blocks walking.
       if (piece.bottom < 1700 && piece.top > 300) colliders.push(piece.footprint.map((p) => [p[0] * M, p[1] * M] as Vec2));
     }
-    addOpenings(group, fill, fp, level, height, mats);
+    addOpenings(group, windows, fp, level, height, mats);
   }
 
   // Floors, ceilings, skirting and lighting
@@ -128,7 +131,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
   const entries = roomEntries(footprints, level, elevation);
   for (const room of level.rooms) {
     addSkirting(group, room, doorGaps, mats);
-    addRoomLighting(ceilings, fill, room, level.height * M, mats);
+    addRoomLighting(ceilings, room, level.height * M, mats);
     const floor = new THREE.Mesh(flatPolygon(room.polygon, 0.001), mats.get(room.floorMaterial ?? level.defaultFloorMaterial));
     floor.receiveShadow = true;
     floor.userData = { kind: 'floor', id: room.id };
@@ -143,6 +146,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
       polygon: room.polygon.map((p) => [p[0] * M, p[1] * M] as Vec2),
       anchor: toWorld(lp, elevation),
       entries: entries.get(room.id) ?? [],
+      windows: windows.get(room.id) ?? [],
     });
   }
 
@@ -176,7 +180,7 @@ export function buildLevel(level: Level, registry: Registry, mats: MaterialLibra
   const bounds = new THREE.Box3().setFromObject(group);
   if (bounds.isEmpty()) bounds.set(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 3, 5));
   const ready = Promise.all(pending).then(() => undefined);
-  return { group, ceilings, fill, colliders, obstacles, rooms: roomInfos, bounds, ready };
+  return { group, ceilings, colliders, obstacles, rooms: roomInfos, bounds, ready };
 }
 
 function withShadows<T extends THREE.Object3D>(obj: T): T {
@@ -314,7 +318,7 @@ const downlightGeom = new THREE.CircleGeometry(0.045, 20).rotateX(Math.PI / 2);
 downlightGeom.userData.shared = true;
 
 /** A warm ceiling light per room plus visible recessed downlights (shown with the ceilings in walk mode). */
-function addRoomLighting(ceilings: THREE.Group, fill: THREE.Group, room: Room, ceilingY: number, mats: MaterialLibrary) {
+function addRoomLighting(ceilings: THREE.Group, room: Room, ceilingY: number, mats: MaterialLibrary) {
   const poly = room.polygon.map((p) => [p[0] * M, p[1] * M] as Vec2);
   const areaM2 = Math.abs(signedArea(poly));
   const centre = labelPoint(poly);
@@ -322,16 +326,13 @@ function addRoomLighting(ceilings: THREE.Group, fill: THREE.Group, room: Room, c
   // Recessed lights shine down: floor and lower walls are lit, the ceiling only gets bounce light (no hot spot).
   const intensity = Math.min(10, 2.5 + areaM2 * 0.35);
   const light = new THREE.SpotLight('#fff0dc', intensity, 0, 1.15, 0.9, 2);
+  // Used as-is by the path tracer; the real-time view copies the nearest rooms' lights into a small pool.
   light.userData.roomLight = true;
+  light.userData.roomId = room.id;
+  light.visible = false;
   light.position.set(centre[0], ceilingY - 0.02, centre[1]);
   light.target.position.set(centre[0], 0, centre[1]);
   ceilings.add(light, light.target);
-  // That bounce: the lit floor brightens the ceiling, most above the middle of the room.
-  // Aimed up from table height, so it reaches the ceiling and upper walls but not the undersides of furniture.
-  const bounce = new THREE.SpotLight('#f6eee4', intensity * 1.3, 0, 1.4, 1, 2);
-  bounce.position.set(centre[0], 1.2, centre[1]);
-  bounce.target.position.set(centre[0], ceilingY, centre[1]);
-  fill.add(bounce, bounce.target);
 
   const xs = poly.map((p) => p[0]);
   const zs = poly.map((p) => p[1]);
@@ -385,7 +386,9 @@ function addCurtains(holder: THREE.Group, width: number, side: 1 | -1, wallHalf:
   holder.add(rod);
 }
 
-function addOpenings(group: THREE.Group, fill: THREE.Group, fp: WallFootprint, level: Level, wallHeight: number, mats: MaterialLibrary) {
+const UP = new THREE.Vector3(0, 1, 0);
+
+function addOpenings(group: THREE.Group, windows: Map<string, RoomWindow[]>, fp: WallFootprint, level: Level, wallHeight: number, mats: MaterialLibrary) {
   const { frame } = fp;
   const thickness = frame.wall.thickness * M;
   const frameMat = mats.color(FRAME, 0.5);
@@ -441,13 +444,14 @@ function addOpenings(group: THREE.Group, fill: THREE.Group, fp: WallFootprint, l
         addCurtains(holder, width, side, thickness / 2, level.height * M, mats);
       }
       if (inside) {
-        // Sky light through the opening: brightest by the window, fading across the room.
-        const light = new THREE.RectAreaLight('#f3f7ff', 6, width, height);
-        light.position.set(0, bottom + height / 2, side * (thickness / 2 + 0.03));
-        // Area lights shine along their -Z: turn it to face into the room.
-        light.rotation.y = side > 0 ? Math.PI : 0;
-        holder.add(light);
-        fill.attach(light);
+        const list = windows.get(inside.id) ?? [];
+        list.push({
+          position: toWorld(centre, level.elevation * M + bottom + height / 2).add(new THREE.Vector3(0, 0, side * (thickness / 2 + 0.03)).applyAxisAngle(UP, yaw)),
+          rotationY: yaw + (side > 0 ? Math.PI : 0),
+          width,
+          height,
+        });
+        windows.set(inside.id, list);
       }
     }
     // Glass lets the sun through, so it casts no shadow.

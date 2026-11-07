@@ -19,6 +19,8 @@ const KNOWN_NOISE =
 export async function launch(port = 9334) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'homeset-chrome-'));
   const gpuFlags = process.env.GPU === '1' ? ['--use-angle=metal', '--enable-gpu'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+  // UNCAPPED=1 lifts the 60 fps limit, so frame-rate measurements show real differences.
+  if (process.env.UNCAPPED === '1') gpuFlags.push('--disable-gpu-vsync', '--disable-frame-rate-limit');
   const chrome = spawn(
     CHROME,
     ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, ...gpuFlags, '--ignore-gpu-blocklist', '--no-first-run', '--no-default-browser-check', '--window-size=1440,900', 'about:blank'],

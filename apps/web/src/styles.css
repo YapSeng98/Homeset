@@ -1,4 +1,5 @@
-/* Design tokens. White-label later by overriding these per organisation. */
+/* Design tokens. White-label later by overriding these per organisation.
+   Overlays on the 3D view use near-opaque colours, not backdrop blur: blurring behind them on every 3D frame is costly. */
 :root {
   --brand: #0e4a42;
   --brand-strong: #093832;
@@ -19,8 +20,8 @@
   --danger: #b4372f;
   --ok: #2c7a4b;
   --wall: #2b2f2d;
-  --glass: rgba(255, 255, 255, 0.84);
-  --ink-glass: rgba(14, 22, 20, 0.7);
+  --glass: rgba(255, 255, 255, 0.93);
+  --ink-glass: rgba(14, 22, 20, 0.78);
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -101,7 +102,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .seg button:disabled { opacity: 0.4; cursor: default; }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(23, 32, 29, 0.14); }
 .seg-sm button { height: 26px; padding: 0 9px; font-size: 12px; }
-.seg-glass { background: rgba(255, 255, 255, 0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); }
+.seg-glass { background: rgba(255, 255, 255, 0.92); box-shadow: var(--shadow); }
 .seg-glass button.on { background: var(--brand); color: #fff; }
 .lang-select { height: 32px; border-radius: 10px; border: 0; padding: 0 8px; font-weight: 700; font-size: 12px; background: rgba(255, 255, 255, 0.82); box-shadow: var(--shadow); }
 
@@ -212,7 +213,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .stage-3d { position: absolute; inset: 0; }
 .hintbar {
   position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  background: var(--ink-glass); color: #fff; padding: 8px 15px; border-radius: 20px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  background: var(--ink-glass); color: #fff; padding: 8px 15px; border-radius: 20px;
   font-size: 12px; pointer-events: none; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis;
 }
 .floating { position: absolute; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 14px; }
@@ -242,24 +243,24 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .stat b { display: block; font-family: var(--font-display); font-weight: 600; font-size: 22px; }
 .stat span { font-size: 12px; color: var(--text-2); }
 .stage-actions { position: absolute; top: 12px; right: 12px; z-index: 4; display: flex; gap: 8px; }
-.stage-actions > .btn, .stage-actions .photo-btn { background: var(--glass); border-color: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow); }
+.stage-actions > .btn, .stage-actions .photo-btn { background: var(--glass); border-color: rgba(255, 255, 255, 0.7); box-shadow: var(--shadow); }
 .photo-progress { top: 0; right: 0; width: 300px; display: flex; flex-direction: column; gap: 8px; z-index: 4; padding: 12px; }
 
 /* Real View markers: a ring on the floor where the next room's 360° was taken */
 .pano-marker { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: #fff; font: inherit; }
 .pano-ring { width: 48px; height: 48px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.95); background: rgba(200, 161, 90, 0.28); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35); transform: perspective(220px) rotateX(58deg); transition: transform 150ms ease, background 150ms ease; }
 .pano-marker:hover .pano-ring, .pano-marker:focus-visible .pano-ring { background: rgba(200, 161, 90, 0.55); transform: perspective(220px) rotateX(58deg) scale(1.12); }
-.pano-label { background: var(--ink-glass); padding: 4px 11px; border-radius: 12px; font-size: 12px; font-weight: 700; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.pano-label { background: var(--ink-glass); padding: 4px 11px; border-radius: 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .room-chips { position: absolute; left: 12px; right: 12px; bottom: 56px; display: flex; gap: 6px; overflow-x: auto; justify-content: center; flex-wrap: wrap; }
 .room-chips button, .tour-rooms button {
   background: var(--glass); border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 17px; height: 32px; padding: 0 14px; cursor: pointer;
-  font-weight: 600; box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: background 120ms ease;
+  font-weight: 600; box-shadow: var(--shadow); transition: background 120ms ease;
 }
 .room-chips button:hover, .tour-rooms button:hover { background: #fff; }
 .room-chips button.on, .tour-rooms button.on { background: var(--brand); color: #fff; border-color: var(--brand); }
 .room-size {
   position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 1px; padding: 8px 13px; border-radius: 12px;
-  background: var(--ink-glass); color: #fff; font-size: 12.5px; white-space: nowrap; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  background: var(--ink-glass); color: #fff; font-size: 12.5px; white-space: nowrap;
   box-shadow: var(--shadow); pointer-events: none;
 }
 .room-size strong { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
@@ -295,7 +296,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .tour-top { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; pointer-events: none; z-index: 3; }
 .tour-top > * { pointer-events: auto; }
 .listing-card {
-  background: rgba(255, 255, 255, 0.93); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 20px; padding: 16px 18px; box-shadow: var(--shadow-lg); max-width: 380px;
 }
 .listing-card h1 { font-family: var(--font-display); font-weight: 600; font-size: 22px; line-height: 1.18; margin-top: 4px; }
@@ -315,7 +316,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
 .tour-rooms button { flex: none; }
 .tour-bottom { display: flex; gap: 12px; align-items: flex-end; justify-content: space-between; }
 .agent-card {
-  background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 18px; padding: 11px 14px; box-shadow: var(--shadow-lg); display: flex; gap: 11px; align-items: center;
 }
 .agent-avatar {
@@ -372,7 +373,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; }
     background: var(--surface); border-radius: 22px 22px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 30px rgba(10, 18, 16, 0.16);
   }
-  .tour-bottom .agent-card { background: none; border: 0; box-shadow: none; padding: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .tour-bottom .agent-card { background: none; border: 0; box-shadow: none; padding: 0; }
   .tour-actions .btn { flex: 1; box-shadow: none; }
   .watermark { display: none; }
 }

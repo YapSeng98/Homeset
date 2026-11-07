@@ -6,7 +6,6 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { distanceToPolygonEdge, pointInPolygon, type HomeModel, type Registry, type Vec2 } from '@homeset/core';
 import { buildLevel, type BuiltLevel, type RoomEntry, type RoomInfo } from './house';
 import { MaterialLibrary } from './materials';
@@ -108,10 +107,16 @@ function rayToEdge(poly: Vec2[], ox: number, oz: number, dx: number, dz: number)
   return best;
 }
 
-let areaLightsReady = false;
-
 /** Room-light output in path-traced photos, relative to the real-time view (see pathTrace). */
 const PATH_TRACE_ROOM_LIGHT = 3;
+/** Retina screens draw at 1.5× rather than 2×: still sharp, half the pixels of 2× to shade. */
+const MAX_PIXEL_RATIO = 1.5;
+/** After the view stops changing, wait this long, then draw one full-quality frame (ambient occlusion). */
+const SETTLE_MS = 160;
+/** Daylight through the current room's windows, per m² of glass (real-time walk view). */
+const WINDOW_LIGHT = 12;
+/** Ceiling glow standing in for light bounced off the floor (real-time walk view). */
+const CEILING_GLOW = 0.3;
 
 /** Walk-mode lens: about 75° across, like a 24 mm property-photo lens, so rooms look their real size. */
 export function walkFov(aspect: number): number {
@@ -137,6 +142,17 @@ export class HouseViewer {
   private readonly gtao: GTAOPass | null = null;
   private readonly sun = new THREE.DirectionalLight('#fff4e5', 2.0);
   private readonly hemi = new THREE.HemisphereLight('#ffffff', '#d9cfc2', 0.45);
+  /**
+   * Two soft daylight spots that follow the walker to the current room's largest windows, shining in from
+   * outside. Area lights at every window looked similar but cost about three quarters of the frame rate.
+   */
+  private readonly windowLights = [0, 1].map(() => new THREE.SpotLight('#f3f7ff', 0, 0, 0.95, 1, 2));
+  /**
+   * Ceiling lights of the walker's room and the nearest others. Every pixel pays for every light, and lighting
+   * all rooms at once (only a few are ever in view) cost two thirds of the frame rate.
+   */
+  private readonly roomLights = [0, 1, 2, 3].map(() => new THREE.SpotLight('#fff0dc', 0, 0, 1.15, 0.9, 2));
+  private litRooms = '';
   private readonly studioBackground: THREE.Color;
   private readonly resizeObserver: ResizeObserver;
   private built: BuiltLevel | null = null;
@@ -144,6 +160,8 @@ export class HouseViewer {
   private levelId: string | null = null;
   private mode: ViewMode = 'orbit';
   private dirty = true;
+  /** When to draw the full-quality frame once the view has stopped changing (0 = drawn). */
+  private settleAt = 0;
   private photoActive = false;
   private tracer: import('three-gpu-pathtracer').WebGLPathTracer | null = null;
   private denoiseMaterial: typeof import('three-gpu-pathtracer').DenoiseMaterial | null = null;
@@ -157,14 +175,12 @@ export class HouseViewer {
     private readonly opts: HouseViewerOptions,
   ) {
     this.quality = opts.quality ?? defaultQuality();
-    if (!areaLightsReady) {
-      RectAreaLightUniformsLib.init();
-      areaLightsReady = true;
-    }
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // The house does not move: draw the sun's shadows once per change (see invalidate), not every frame.
+    this.renderer.shadowMap.autoUpdate = false;
     // Neutral tone mapping keeps paint and floor colours true to the catalog swatches.
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 0.95;
@@ -186,6 +202,10 @@ export class HouseViewer {
     this.sun.shadow.mapSize.set(shadowSize, shadowSize);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.02;
+    for (const light of [...this.windowLights, ...this.roomLights]) {
+      light.visible = false;
+      this.scene.add(light, light.target);
+    }
     this.scene.add(this.sun, this.sun.target, this.hemi);
 
     const ground = new THREE.Mesh(
@@ -249,10 +269,14 @@ export class HouseViewer {
     this.camera.fov = mode === 'walk' ? this.walkLens() : 50;
     this.camera.updateProjectionMatrix();
     // Inside, light should come from the windows and ceiling lights, not from everywhere at once.
-    // Phones skip the window and bounce lights (see BuiltLevel.fill), so they keep more flat fill light.
-    const fill = this.quality === 'high';
-    this.hemi.intensity = mode === 'walk' ? (fill ? 0.3 : 0.55) : 0.45;
-    this.scene.environmentIntensity = mode === 'walk' ? (fill ? 0.35 : 0.5) : 0.4;
+    // Phones skip the window daylight, so they keep more flat fill light.
+    const daylight = this.quality === 'high';
+    this.hemi.intensity = mode === 'walk' ? (daylight ? 0.3 : 0.55) : 0.45;
+    this.scene.environmentIntensity = mode === 'walk' ? (daylight ? 0.35 : 0.5) : 0.4;
+    this.setCeilingGlow(mode === 'walk');
+    this.placeWindowLights();
+    this.placeRoomLights();
+    this.invalidate();
     this.renderer.toneMappingExposure = mode === 'walk' ? 1.05 : 0.95;
     // Inside, windows look out onto a sky; the dollhouse sits in a clean studio.
     this.scene.background = mode === 'walk' ? this.mats.sky() : this.studioBackground;
@@ -281,7 +305,7 @@ export class HouseViewer {
     const entry = this.bestEntry(room);
     if (entry) {
       this.walk.placeAt(entry.stand, entry.stand.clone().add(new THREE.Vector3(Math.cos(entry.heading), 0, Math.sin(entry.heading))));
-      this.dirty = true;
+      this.arrived(room.id);
       return;
     }
     const obstacles = this.built?.obstacles ?? [];
@@ -325,6 +349,13 @@ export class HouseViewer {
       }
     }
     this.walk.placeAt(stand, lookAt);
+    this.arrived(room.id);
+  }
+
+  /** After jumping into a room: light it and its neighbours now, without waiting for the next room check. */
+  private arrived(roomId: string): void {
+    this.setRoom(roomId);
+    this.placeRoomLights();
     this.dirty = true;
   }
 
@@ -446,16 +477,18 @@ export class HouseViewer {
       ceilings: this.built?.ceilings.visible ?? false,
     };
     // The path tracer computes real daylight and bounce light; the real-time stand-ins would double them.
-    const fill = this.built?.fill;
-    const fillParent = fill?.parent;
-    fill?.removeFromParent();
-    // Each room light stands in for the room's several recessed fittings; without the stand-in fill,
-    // give it their combined output.
+    for (const light of [...this.windowLights, ...this.roomLights]) light.visible = false;
+    this.setCeilingGlow(false);
+    // It lights every room, not just the nearest ones. Each room light stands in for the room's several
+    // recessed fittings; without the stand-ins, give it their combined output.
     const roomLights: [THREE.Light, number][] = [];
     this.built?.ceilings.traverse((o) => {
       if (o.userData.roomLight) roomLights.push([o as THREE.Light, (o as THREE.Light).intensity]);
     });
-    for (const [light, intensity] of roomLights) light.intensity = intensity * PATH_TRACE_ROOM_LIGHT;
+    for (const [light, intensity] of roomLights) {
+      light.intensity = intensity * PATH_TRACE_ROOM_LIGHT;
+      light.visible = true;
+    }
     this.photoActive = true;
     this.walk.enabled = false;
     this.orbit.enabled = false;
@@ -504,16 +537,22 @@ export class HouseViewer {
       this.scene.background = saved.background;
       this.hemi.visible = saved.hemi;
       if (this.built) this.built.ceilings.visible = saved.ceilings;
-      if (fill && fillParent) fillParent.add(fill);
-      for (const [light, intensity] of roomLights) light.intensity = intensity;
+      for (const [light, intensity] of roomLights) {
+        light.intensity = intensity;
+        light.visible = false;
+      }
+      this.setCeilingGlow(this.mode === 'walk');
+      this.placeWindowLights();
+      this.litRooms = '';
+      this.placeRoomLights();
       this.walk.enabled = this.mode === 'walk';
       this.orbit.enabled = this.mode === 'orbit';
       this.photoActive = false;
       if (size) {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
         this.resize();
       }
-      this.dirty = true;
+      this.invalidate();
     }
   }
 
@@ -598,17 +637,90 @@ export class HouseViewer {
     this.clearBuilt();
     const level = this.model?.levels.find((l) => l.id === this.levelId);
     if (!this.model || !level) return;
-    this.built = buildLevel(level, this.opts.registry, this.mats, () => (this.dirty = true));
+    this.built = buildLevel(level, this.opts.registry, this.mats, () => this.invalidate());
     this.built.ceilings.visible = this.mode === 'walk';
-    this.built.fill.visible = this.quality === 'high';
     this.scene.add(this.built.group);
     this.walk.colliders = this.built.colliders;
     this.walk.floorY = level.elevation / 1000;
     this.placeSun();
+    this.placeWindowLights();
+    this.litRooms = '';
+    this.placeRoomLights();
     if (!this.hasFramed && this.built.group.children.length > 1) {
       this.frameAll();
       this.hasFramed = true;
     }
+    this.invalidate();
+  }
+
+  /** Something in the scene changed: redraw, sun shadows included. */
+  private invalidate(): void {
+    this.renderer.shadowMap.needsUpdate = true;
+    this.dirty = true;
+  }
+
+  /** Stand-in for light bounced off the floor onto the ceiling: a soft glow costs nothing per frame. */
+  private setCeilingGlow(on: boolean): void {
+    const ceiling = this.mats.ceiling() as THREE.MeshStandardMaterial;
+    ceiling.emissive.set('#f3ece2');
+    ceiling.emissiveIntensity = on ? CEILING_GLOW : 0;
+  }
+
+  /**
+   * Copies the ceiling lights of the walker's room and the nearest other rooms into the light pool. The pool
+   * stays switched on while walking (unused lights at zero), so its size never changes and shaders never recompile.
+   */
+  private placeRoomLights(): void {
+    const on = this.mode === 'walk';
+    const p = this.camera.position;
+    const nearest = on
+      ? this.rooms
+          .map((r) => ({ id: r.id, d: pointInPolygon([p.x, p.z], r.polygon) ? 0 : distanceToPolygonEdge([p.x, p.z], r.polygon) }))
+          .sort((a, b) => a.d - b.d)
+          .slice(0, this.roomLights.length)
+          .map((r) => r.id)
+      : [];
+    const key = `${on}:${nearest.join()}`;
+    if (key === this.litRooms) return;
+    this.litRooms = key;
+    const sources = new Map<string, THREE.SpotLight>();
+    this.built?.group.updateMatrixWorld(true);
+    this.built?.ceilings.traverse((o) => {
+      if (o.userData.roomLight) sources.set(o.userData.roomId as string, o as THREE.SpotLight);
+    });
+    this.roomLights.forEach((light, i) => {
+      light.visible = on;
+      const source = sources.get(nearest[i] ?? '');
+      light.intensity = source?.intensity ?? 0;
+      if (source) {
+        light.position.copy(source.position).applyMatrix4(source.parent!.matrixWorld);
+        light.target.position.copy(source.target.position).applyMatrix4(source.parent!.matrixWorld);
+        light.target.updateMatrixWorld();
+      }
+    });
+    this.dirty = true;
+  }
+
+  /**
+   * Daylight through the current room's two largest windows. Both lights stay switched on while walking
+   * (unused ones at zero), so the light count never changes and moving between rooms never recompiles shaders.
+   */
+  private placeWindowLights(): void {
+    const on = this.mode === 'walk' && this.quality === 'high';
+    const room = on ? this.rooms.find((r) => r.id === this.currentRoom) : undefined;
+    const windows = [...(room?.windows ?? [])].sort((a, b) => b.width * b.height - a.width * a.height);
+    this.windowLights.forEach((light, i) => {
+      light.visible = on;
+      const w = windows[i];
+      light.intensity = w ? WINDOW_LIGHT * w.width * w.height : 0;
+      if (w) {
+        const inward = new THREE.Vector3(-Math.sin(w.rotationY), 0, -Math.cos(w.rotationY));
+        // From outside and above the window, onto the floor a couple of metres in.
+        light.position.copy(w.position).addScaledVector(inward, -1.2).setY(w.position.y + 0.6);
+        light.target.position.copy(w.position).addScaledVector(inward, 2.5).setY(this.walk.floorY);
+        light.target.updateMatrixWorld();
+      }
+    });
     this.dirty = true;
   }
 
@@ -653,7 +765,7 @@ export class HouseViewer {
     this.camera.aspect = w / h;
     if (this.mode === 'walk') this.camera.fov = this.walkLens();
     this.camera.updateProjectionMatrix();
-    this.dirty = true;
+    this.invalidate();
   }
 
   /** Walk-mode vertical field of view: the natural lens for this screen shape, times the wheel setting. */
@@ -664,6 +776,7 @@ export class HouseViewer {
   private setRoom(id: string | null): void {
     if (id === this.currentRoom) return;
     this.currentRoom = id;
+    this.placeWindowLights();
     this.opts.onRoomChange?.(id);
   }
 
@@ -688,10 +801,18 @@ export class HouseViewer {
         const p = this.camera.position;
         const room = this.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
         this.setRoom(room?.id ?? null);
+        this.placeRoomLights();
       }
     }
     if (this.dirty) {
       this.dirty = false;
+      if (this.composer) {
+        // While the view moves, draw fast frames; ambient occlusion is added once it settles.
+        this.renderer.render(this.scene, this.camera);
+        this.settleAt = time + SETTLE_MS;
+      } else this.draw();
+    } else if (this.settleAt && time >= this.settleAt) {
+      this.settleAt = 0;
       this.draw();
     }
   }
