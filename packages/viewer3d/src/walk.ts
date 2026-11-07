@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Vec2 } from '@homeset/core';
 
-export const EYE_HEIGHT = 1.6;
+/** Camera height, as property photographers use: a little below eye level makes ceilings feel higher and rooms roomier. */
+export const EYE_HEIGHT = 1.5;
 const RADIUS = 0.25;
 const SPEED = 1.6; // m/s, a relaxed walking pace
 
@@ -85,7 +86,8 @@ export class WalkControls {
       const dz = lookAt.z - p.z;
       if (Math.hypot(dx, dz) > 0.01) this.yaw = Math.atan2(-dx, -dz);
     }
-    this.pitch = -0.05;
+    // Level, so walls stand straight: tilting down makes them lean in and the room look smaller.
+    this.pitch = 0;
     this.target = null;
     this.velocity.set(0, 0, 0);
     this.apply();

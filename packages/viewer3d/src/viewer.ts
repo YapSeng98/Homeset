@@ -109,6 +109,8 @@ function rayToEdge(poly: Vec2[], ox: number, oz: number, dx: number, dz: number)
 
 /** Room-light output in path-traced photos, relative to the real-time view (see pathTrace). */
 const PATH_TRACE_ROOM_LIGHT = 3;
+/** Brightness of interior HD photos and Real View 360°s: bright and airy, like listing photos. */
+const PHOTO_EXPOSURE_INSIDE = 1.2;
 /** Retina screens draw at 1.5× rather than 2×: still sharp, half the pixels of 2× to shade. */
 const MAX_PIXEL_RATIO = 1.5;
 /** Dollhouse: after the view stops changing, wait this long, then fade in ambient occlusion over AO_FADE_MS. */
@@ -121,14 +123,14 @@ const WINDOW_LIGHT = 12;
 const CEILING_GLOW = 0.3;
 
 /**
- * Walk-mode lens: about 90° across, the usual for walkthroughs. A screen shows far less than the eye takes in,
- * so a narrower lens makes furniture look too big.
+ * Walk-mode lens: about 100° across, the wide angle property photographers use (16 mm). A screen shows far less
+ * than the eye takes in, so narrower lenses made furniture look big and rooms cramped.
  */
 export function walkFov(aspect: number): number {
-  const across = THREE.MathUtils.degToRad(90);
+  const across = THREE.MathUtils.degToRad(100);
   const vertical = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(across / 2) / aspect));
-  // Portrait phones would need a very tall view to get 90° across; cap it before it distorts.
-  return THREE.MathUtils.clamp(vertical, 50, 85);
+  // Portrait phones would need a very tall view to get 100° across; cap it before it distorts.
+  return THREE.MathUtils.clamp(vertical, 55, 90);
 }
 
 /**
@@ -274,16 +276,16 @@ export class HouseViewer {
     if (this.built) this.built.ceilings.visible = mode === 'walk';
     this.camera.fov = mode === 'walk' ? this.walkLens() : 50;
     this.camera.updateProjectionMatrix();
-    // Inside, light should come from the windows and ceiling lights, not from everywhere at once.
-    // Phones skip the window daylight, so they keep more flat fill light.
+    // Inside, light comes mostly from the windows and ceiling lights. Kept bright and airy, like listing photos:
+    // dim rooms read as smaller. Phones skip the window daylight, so they keep more flat fill light.
     const daylight = this.quality === 'high';
-    this.hemi.intensity = mode === 'walk' ? (daylight ? 0.3 : 0.55) : 0.45;
-    this.scene.environmentIntensity = mode === 'walk' ? (daylight ? 0.35 : 0.5) : 0.4;
+    this.hemi.intensity = mode === 'walk' ? (daylight ? 0.45 : 0.6) : 0.45;
+    this.scene.environmentIntensity = mode === 'walk' ? (daylight ? 0.5 : 0.6) : 0.4;
     this.setCeilingGlow(mode === 'walk');
     this.placeWindowLights();
     this.placeRoomLights();
     this.invalidate();
-    this.renderer.toneMappingExposure = mode === 'walk' ? 1.05 : 0.95;
+    this.renderer.toneMappingExposure = mode === 'walk' ? 1.3 : 0.95;
     // Inside, windows look out onto a sky; the dollhouse sits in a clean studio.
     this.scene.background = mode === 'walk' ? this.mats.sky() : this.studioBackground;
     if (mode === 'walk') {
@@ -324,7 +326,7 @@ export class HouseViewer {
   private bestViewpoint(room: RoomInfo): { stand: THREE.Vector3; heading: number } | undefined {
     const poly = room.polygon;
     const obstacles = this.built?.obstacles ?? [];
-    const halfView = THREE.MathUtils.degToRad(40);
+    const halfView = THREE.MathUtils.degToRad(48);
     // Average distance to the walls across the view.
     const depth = (x: number, z: number, heading: number) => {
       let sum = 0;
@@ -461,6 +463,7 @@ export class HouseViewer {
     const saved = {
       environment: this.scene.environment,
       environmentIntensity: this.scene.environmentIntensity,
+      exposure: this.renderer.toneMappingExposure,
       background: this.scene.background,
       hemi: this.hemi.visible,
       ceilings: this.built?.ceilings.visible ?? false,
@@ -487,6 +490,8 @@ export class HouseViewer {
       const sky = this.mats.sky();
       this.scene.environment = sky;
       this.scene.environmentIntensity = interior ? 1.1 : 0.9;
+      // Fixed per kind of shot, so photos and 360°s look the same whichever view they were started from.
+      this.renderer.toneMappingExposure = interior ? PHOTO_EXPOSURE_INSIDE : 0.95;
       if (interior) this.scene.background = sky;
       if (this.built) this.built.ceilings.visible = interior;
       this.hemi.visible = false;
@@ -523,6 +528,7 @@ export class HouseViewer {
     } finally {
       this.scene.environment = saved.environment;
       this.scene.environmentIntensity = saved.environmentIntensity;
+      this.renderer.toneMappingExposure = saved.exposure;
       this.scene.background = saved.background;
       this.hemi.visible = saved.hemi;
       if (this.built) this.built.ceilings.visible = saved.ceilings;
